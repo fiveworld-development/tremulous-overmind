@@ -259,10 +259,10 @@ index 1bc8b5c..16dba83 100644
  		wobble += G_Rand();
  	}
 diff --git a/src/game/g_buildable.c b/src/game/g_buildable.c
-index 28e37a7..e824f71 100644
+index 28e37a7..60d6f7b 100644
 --- a/src/game/g_buildable.c
 +++ b/src/game/g_buildable.c
-@@ -4381,3 +4381,217 @@ void G_BuildLogRevert( int id )
+@@ -4381,3 +4381,222 @@ void G_BuildLogRevert( int id )
    }
  }
  
@@ -353,10 +353,15 @@ index 28e37a7..e824f71 100644
 +
 +  saved = builder->client->ps;
 +
-+  for( attempt = 0; attempt < 8 && !built; attempt++ )
++  for( attempt = 0; attempt < 12 && !built; attempt++ )
 +  {
 +    ang = ( rand( ) % 360 ) * M_PI / 180.0f;
-+    dist = 120 + rand( ) % 380;
++    // aliens need creep, which only reaches ~120 units around each structure;
++    // humans only need power, which the reactor spreads much further
++    if( team == TEAM_ALIENS )
++      dist = 50 + rand( ) % 110;
++    else
++      dist = 110 + rand( ) % 340;
 +    VectorCopy( around->s.origin, start );
 +    start[ 2 ] += 48;
 +    eye[ 0 ] = start[ 0 ] + cos( ang ) * dist;
