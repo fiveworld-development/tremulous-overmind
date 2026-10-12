@@ -129,12 +129,14 @@
         '<button class="t-weap" data-tap="' + A.NEXT + '" aria-label="Next weapon">Wpn</button>' +
         // contextual: shown from the player's class and inventory (poll)
         '<div class="t-ctx">' +
+          '<button data-ctx="build" data-ui="build" aria-label="Build menu" hidden>Build</button>' +
           '<button data-ctx="third" data-hold="' + A.USE + '" aria-label="Third attack" hidden>3rd</button>' +
           '<button data-ctx="decon" data-tap="' + A.DECON + '" aria-label="Deconstruct" hidden>Decon</button>' +
           '<button data-ctx="gren" data-cmd="gren" aria-label="Throw grenade" hidden>Gren</button>' +
           '<button data-ctx="jet" data-cmd="jet" aria-label="Jetpack on or off" hidden>Jet</button>' +
         '</div>' +
       '</div>' +
+      '<div class="t-hint" hidden></div>' +
       '<div class="t-vote" hidden><span></span>' +
         '<button data-vote="yes">Yes</button><button data-vote="no">No</button></div>' +
       '<div class="t-pick" hidden><p class="t-pick-title"></p><div class="t-pick-row"></div><div class="t-pick-alt"></div></div>' +
@@ -161,6 +163,7 @@
     var stick = root.querySelector('.t-stick');
     var knob = stick.querySelector('b');
     var voteBar = root.querySelector('.t-vote');
+    var hint = root.querySelector('.t-hint');
     var chat = root.querySelector('.t-chat');
     var chatInput = chat.querySelector('input');
     var ctx = {};
@@ -211,8 +214,10 @@
       return M.UTF8ToString(M._Cvar_VariableString(names[name]));
     }
     function playerState() {
+      // "team class pm_type stage blueprint placeable buildpoints weapon" (cgame patch)
       var v = cvar('overmind_state').split(' ').map(Number);
-      return v.length >= 3 ? { team: v[0], cls: v[1], pm: v[2], stage: v[3] || 0 } : null;
+      return v.length >= 3 ? { team: v[0], cls: v[1], pm: v[2], stage: v[3] || 0,
+                               bp: v[4] || 0, ok: v[5] === 1, points: v[6] || 0, weap: v[7] || 0 } : null;
     }
     function runCmd(name) {
       var c = CMD[name];
@@ -242,6 +247,45 @@
           ['builderupg', 'Adv. Granger', 'Faster builder, spits acid.', 1]],
       2: [['rifle', 'Rifle', 'Soldier. Earn credits, buy gear.'], ['ckit', 'Builder', 'Builds the human base.']]
     };
+    // build picker: [build name, label, what it does, build points, first stage (0 = S1),
+    // only stage 3, advanced granger only]; costs and stages from bg_misc.c / tremulous.h
+    var BUILDS = {
+      1: [['eggpod', 'Egg', 'Spawn point', 10], ['acid_tube', 'Acid Tube', 'Sprays acid', 8],
+          ['barricade', 'Barricade', 'Blocks the way', 8], ['overmind', 'Overmind', 'Powers the hive', 0],
+          ['trapper', 'Trapper', 'Locks humans', 8, 1, 0, 1], ['booster', 'Booster', 'Heals, poisons', 12, 1, 0, 1],
+          ['hive', 'Hive', 'Swarm attack', 12, 2, 1, 1]],
+      2: [['telenode', 'Telenode', 'Spawn point', 10], ['mgturret', 'Turret', 'Auto gun', 8],
+          ['arm', 'Armoury', 'Buy gear', 10], ['medistat', 'Medistation', 'Heals', 8],
+          ['reactor', 'Reactor', 'Powers the base', 0], ['repeater', 'Repeater', 'Extends power', 4],
+          ['dcc', 'Defence Comp.', 'Repairs, aims', 8, 1], ['tesla', 'Tesla', 'Zaps aliens', 10, 2, 1]]
+    };
+    var WP_ABUILD = 24, WP_ABUILD2 = 25;
+    var buildOpen = false;     // build picker requested (Build button or the game's build menu)
+    var pendingBuild = '', pendingUntil = 0;   // chosen while the construction kit was still being drawn
+    var buildName = {};
+    [1, 2].forEach(function (t) { BUILDS[t].forEach(function (b) { buildName[b[0]] = b[1]; }); });
+    var BA_NAMES = [null, 'eggpod', 'overmind', 'barricade', 'acid_tube', 'trapper', 'booster', 'hive',
+                    'telenode', 'mgturret', 'tesla', 'arm', 'dcc', 'medistat', 'reactor', 'repeater'];
+    function buildButtons(st) {
+      return BUILDS[st.team].filter(function (b) {
+        return st.stage >= (b[4] || 0) && (!b[5] || st.stage === 2) && (!b[6] || st.weap === WP_ABUILD2);
+      }).map(function (b) {
+        var cls = (st.team === 1 ? 'p-alien' : 'p-human') + (b[3] > st.points ? ' p-low' : '');
+        return button('!build:' + b[0], b[1], b[2] + ' · ' + (b[3] ? b[3] + ' BP' : 'free'), cls);
+      }).join('');
+    }
+    function isBuilder(st) {
+      return !!st && st.pm !== PM_DEAD && ((st.team === 1 && (st.cls === PCL_ALIEN_BUILDER0 || st.cls === PCL_ALIEN_BUILDER0_UPG)) ||
+                                           (st.team === 2 && (' ' + cvar('ui_carriage')).indexOf(' W' + WP_HBUILD + ' ') >= 0));
+    }
+    function openBuild() {
+      var st = lastState;
+      if (!isBuilder(st)) return;
+      // a new choice replaces a held blueprint (Cmd_Build_f), so nothing to cancel first
+      if (st.team === 2 && st.weap !== WP_HBUILD) command('itemact ckit');
+      buildOpen = true; pickKey = '-';
+      showPick(st);
+    }
     var pickKey = '', pickHold = 0;
     var queuedTeam = 0;        // picked a class and waiting in the spawn queue of this team
     var pendingClass = '';     // picked on the death screen: respawn, then spawn as this
@@ -265,6 +309,8 @@
     }
     function showPick(st) {
       var key = pickFor(st);
+      if (buildOpen && (key || !isBuilder(st))) buildOpen = false;
+      if (buildOpen) key = 'build:' + st.points + ':' + st.weap + ':' + st.stage;
       // death screen with a class chosen: keep asking to respawn until the server lets us
       if (pendingClass && key.indexOf('dead') === 0) {
         key = 'wait';
@@ -281,7 +327,12 @@
       if (!key) return;
       var title = pick.querySelector('.t-pick-title'), row = pick.querySelector('.t-pick-row'), alt = pick.querySelector('.t-pick-alt');
       var other = st.team === 1 ? 2 : 1;
-      if (key === 'team') {
+      pick.classList.toggle('t-pick-build', key.indexOf('build') === 0);
+      if (key.indexOf('build') === 0) {
+        title.textContent = 'Build · ' + st.points + ' BP free';
+        row.innerHTML = buildButtons(st);
+        alt.innerHTML = button('!close', 'Close', '', 'p-small');
+      } else if (key === 'team') {
         title.textContent = 'Choose your side';
         row.innerHTML = button('team aliens', 'Aliens', 'Evolve and overrun', 'p-alien') +
                         button('team humans', 'Humans', 'Build, buy and defend', 'p-human');
@@ -302,6 +353,15 @@
     }
     function choose(v) {
       if (v === '!requeue') { queuedTeam = 0; pendingClass = ''; pickKey = '-'; return; }
+      if (v === '!close') { buildOpen = false; return; }
+      if (v.indexOf('!build:') === 0) {
+        buildOpen = false;
+        var b = v.slice(7);
+        // the build command needs the construction kit in hand; it may still be coming up
+        if (lastState && lastState.team === 2 && lastState.weap !== WP_HBUILD) { pendingBuild = b; pendingUntil = Date.now() + 3000; }
+        else command('build ' + b);
+        return;
+      }
       if (v.indexOf('!respawn:') === 0) {      // leave the body now, the class follows (pickFor)
         pendingClass = v.slice(9); nextFire = Date.now() + 700; tap(A.FIRE);
         return;
@@ -318,15 +378,32 @@
       var carry = st ? ' ' + cvar('ui_carriage') : '';
       var builder = !!st && ((st.team === 1 && (st.cls === PCL_ALIEN_BUILDER0 || st.cls === PCL_ALIEN_BUILDER0_UPG)) ||
                              (st.team === 2 && carry.indexOf(' W' + WP_HBUILD + ' ') >= 0));
-      setBtn(ctx.decon, 'Decon', builder);
+      // building: Build opens the picker; with a blueprint in hand Fire places it and Alt drops it
+      var holding = !!st && st.bp > 0 && st.weap >= WP_ABUILD && st.weap <= WP_HBUILD;
+      if (pendingBuild && st && st.weap === WP_HBUILD) { command('build ' + pendingBuild); pendingBuild = ''; }
+      if (pendingBuild && Date.now() > pendingUntil) pendingBuild = '';
+      // with the kit in hand Fire itself opens the picker; else this draws the kit first
+      setBtn(ctx.build, 'Build', builder && !!st && st.team === 2 && st.weap !== WP_HBUILD);
+      setBtn(ctx.decon, 'Decon', builder && !holding);
       setBtn(ctx.gren, 'Gren', !!st && carry.indexOf(' U' + UP_GRENADE + ' ') >= 0);
       setBtn(ctx.jet, 'Jet', !!st && carry.indexOf(' U' + UP_JETPACK + ' ') >= 0);
       // the thumb cluster follows the class: aliens get their own attacks, humans their gear
       var human = !!st && st.team === 2, al = st && st.team === 1 ? ALIEN[st.cls] || {} : null;
-      var alt = al ? al.alt : carry.indexOf(' W' + WP_LUCIFER + ' ') >= 0 ? 'Alt' : builder ? 'Cancel' : '';
-      setBtn(pad.fire, al && al.fire || 'Fire', true);
-      setBtn(pad.lfire, al && al.fire || 'Fire', !!st && st.team !== 0);
+      // builders: primary with nothing in hand opens the build menu (buildFire), the
+      // granger's secondary claws then (cancelBuildFire)
+      var alt = holding ? 'Cancel' : al ? (builder ? 'Claw' : al.alt) : carry.indexOf(' W' + WP_LUCIFER + ' ') >= 0 ? 'Alt' : '';
+      var fire = holding ? 'Place' : builder && (al || st.weap === WP_HBUILD) ? 'Build' : al && al.fire || 'Fire';
+      setBtn(pad.fire, fire, true);
+      setBtn(pad.lfire, fire, !!st && st.team !== 0);
       setBtn(pad.alt, alt || 'Alt', !!alt);
+      pad.fire.classList.toggle('place', holding);
+      pad.fire.classList.toggle('ok', holding && st.ok);
+      pad.lfire.classList.toggle('place', holding);
+      pad.lfire.classList.toggle('ok', holding && st.ok);
+      var h = holding ? (buildName[BA_NAMES[st.bp]] || 'Structure') + (st.ok ? ' · tap Place' : ' · can’t build here, aim elsewhere') : '';
+      if (hint.textContent !== h) hint.textContent = h;
+      hint.hidden = !h;
+      hint.classList.toggle('ok', holding && st.ok);
       setBtn(ctx.third, al && al.third || '3rd', !!(al && al.third));
       setBtn(pad.crouch, al ? 'Wall' : 'Duck', human || !!(al && al.wall));
       setBtn(pad.use, al ? 'Evolve' : 'Use', !!st);
@@ -395,6 +472,8 @@
       setMode(inGame ? 'game' : 'menu');
       if ((pollN++ & 1) === 0) {
         lastState = inGame ? playerState() : null;
+        // the game asked for its build menu (builder fired with nothing in hand)
+        if (cvar('overmind_menu') === 'build') { command('set overmind_menu ""'); if (inGame) buildOpen = true; }
         showPick(lastState);
         updateContext(lastState);
         // died or switched team while sprinting
@@ -514,6 +593,7 @@
         case 'autofire': settings.autofire = p[1] === '1'; break;
         case 'size': if (SIZES[p[1]]) settings.size = p[1]; break;
         case 'chat': sheet.hidden = true; openChat(); break;
+        case 'build': openBuild(); break;
         case 'switch':
           sheet.hidden = true;
           if (lastState && lastState.team) command(lastState.team === 1 ? 'team humans' : 'team aliens');

@@ -20,21 +20,25 @@ index cd30f77..54be3cc 100644
    UI_NETSOURCE,
    UI_NETMAPPREVIEW,
 diff --git a/src/cgame/cg_main.c b/src/cgame/cg_main.c
-index 0753dc5..317c315 100644
+index 0753dc5..cff30c8 100644
 --- a/src/cgame/cg_main.c
 +++ b/src/cgame/cg_main.c
-@@ -425,6 +425,20 @@ static void CG_SetUIVars( void )
+@@ -425,6 +425,24 @@ static void CG_SetUIVars( void )
    trap_Cvar_Set( "ui_carriage", carriageCvar );
  
    trap_Cvar_Set( "ui_stages", va( "%d %d", cgs.alienStage, cgs.humanStage ) );
 +
-+  // Overmind: "team class pm_type stages" for the browser page, which draws the
-+  // touch team/spawn picker from it. Only written when it changes.
++  // Overmind: "team class pm_type stage blueprint placeable buildpoints weapon" for
++  // the browser page, which draws the touch team/spawn/build pickers from it. Only
++  // written when it changes.
 +  {
-+    static char last[ 32 ];
-+    const char *s = va( "%d %d %d %d", cg.snap->ps.stats[ STAT_TEAM ],
++    static char last[ 48 ];
++    int         bp = cg.snap->ps.stats[ STAT_BUILDABLE ];
++    const char *s = va( "%d %d %d %d %d %d %d %d", cg.snap->ps.stats[ STAT_TEAM ],
 +      cg.snap->ps.stats[ STAT_CLASS ], cg.snap->ps.pm_type,
-+      cg.snap->ps.stats[ STAT_TEAM ] == TEAM_ALIENS ? cgs.alienStage : cgs.humanStage );
++      cg.snap->ps.stats[ STAT_TEAM ] == TEAM_ALIENS ? cgs.alienStage : cgs.humanStage,
++      bp & ~SB_VALID_TOGGLEBIT, ( bp & SB_VALID_TOGGLEBIT ) ? 1 : 0,
++      cg.snap->ps.persistant[ PERS_BP ], cg.snap->ps.weapon );
 +    if( strcmp( s, last ) )
 +    {
 +      Q_strncpyz( last, s, sizeof( last ) );
@@ -45,21 +49,27 @@ index 0753dc5..317c315 100644
  
  /*
 diff --git a/src/cgame/cg_servercmds.c b/src/cgame/cg_servercmds.c
-index dd2caef..baf5c05 100644
+index dd2caef..1ec3cb8 100644
 --- a/src/cgame/cg_servercmds.c
 +++ b/src/cgame/cg_servercmds.c
-@@ -854,6 +854,16 @@ void CG_Menu( int menu, int arg )
+@@ -854,6 +854,22 @@ void CG_Menu( int menu, int arg )
    if( type == DT_COMMAND && cg_disableCommandDialogs.integer )
      return;
  
 +  // Overmind: on touch screens the page draws its own large team and spawn
-+  // pickers from overmind_state, the small engine menus would sit underneath
-+  if( ( menu == MN_TEAM || menu == MN_A_CLASS || menu == MN_H_SPAWN ) )
++  // pickers from overmind_state, the small engine menus would sit underneath.
++  // The build menus become a request for the page's build picker (overmind_menu).
++  if( menu == MN_TEAM || menu == MN_A_CLASS || menu == MN_H_SPAWN ||
++      menu == MN_A_BUILD || menu == MN_H_BUILD )
 +  {
 +    char touch[ 8 ];
 +    trap_Cvar_VariableStringBuffer( "overmind_touch", touch, sizeof( touch ) );
 +    if( atoi( touch ) )
++    {
++      if( menu == MN_A_BUILD || menu == MN_H_BUILD )
++        trap_Cvar_Set( "overmind_menu", "build" );
 +      return;
++    }
 +  }
 +
    if( cmd != dialog )
@@ -157,7 +167,7 @@ index 160b735..14f9a00 100644
    // build the render lists
    if( !cg.hyperspace )
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
-index f68a52a..9a611de 100644
+index f68a52a..ee4f994 100644
 --- a/src/game/g_bot.c
 +++ b/src/game/g_bot.c
 @@ -80,23 +80,19 @@ qboolean G_BotAdd( char *name, team_t team ) {
@@ -343,7 +353,7 @@ index f68a52a..9a611de 100644
 +	}
 +	if( mapStart != level.startTime ) {
 +		mapStart = level.startTime;
-+		base = G_Rand_Range( 3, 9 ); // 3..8
++		base = G_Rand_Range( 2, 7 ); // 2..6: real players should usually out-aim them
 +	}
 +	skill = base + G_Rand_Range( -2, 3 ); // -2..+2
 +	if( skill < 1 ) skill = 1;
@@ -391,7 +401,7 @@ index f68a52a..9a611de 100644
  	}
  }
 diff --git a/src/game/g_bot.h b/src/game/g_bot.h
-index 2e09378..3d420d1 100644
+index 2e09378..f23fbc4 100644
 --- a/src/game/g_bot.h
 +++ b/src/game/g_bot.h
 @@ -188,6 +188,7 @@ typedef struct
@@ -411,6 +421,15 @@ index 2e09378..3d420d1 100644
  void G_BotDelRandom ( team_t team );
  
  // g_bot_nav.c
+@@ -335,6 +338,8 @@ int botFindClosestNode( gentity_t *self );
+ int botFindEnemy( gentity_t *self, int maxRange );
+ qboolean botFindPath( int *path , int goal, int start );
+ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch);
++void botTurnTowards( gentity_t *self, int axis, float target, float degPerSec );
++float botAimTurnSpeed( gentity_t *self );
+ qboolean botFindClosestFriend( gentity_t *self );
+ qboolean botSameTeam( gentity_t *ent1, gentity_t *ent2 );
+ qboolean botHitTarget( gentity_t *self, int time );
 diff --git a/src/game/g_bot_common.c b/src/game/g_bot_common.c
 index 5a888c9..27e0f02 100644
 --- a/src/game/g_bot_common.c
@@ -425,11 +444,60 @@ index 5a888c9..27e0f02 100644
  }
  /**
   * Bot will attack to a target
+diff --git a/src/game/g_bot_nav.c b/src/game/g_bot_nav.c
+index 723ef47..99d3f59 100644
+--- a/src/game/g_bot_nav.c
++++ b/src/game/g_bot_nav.c
+@@ -311,7 +311,8 @@ qboolean botAimAtPath( gentity_t *self )
+ 		VectorNormalize( dirToTarget );
+ 		vectoangles( dirToTarget, angleToTarget );
+ 		//self->client->ps.delta_angles[ PITCH ] = ANGLE2SHORT( angleToTarget[ PITCH ] ); //this makes bots to move aim in Z angles
+-		self->client->ps.delta_angles[ YAW ] = ANGLE2SHORT( angleToTarget[ YAW ] );
++		// Overmind: fast but not instant turns along the path (no millisecond spins)
++		botTurnTowards( self, YAW, angleToTarget[ YAW ], 720.0f );
+ 		//don't use lookat on aiming path
+ 		//self->bot->move.lookat[ PITCH ] = self->client->ps.delta_angles[ PITCH ];
+ 		//self->bot->move.lookat[ YAW ] = ANGLE2SHORT( angleToTarget[ YAW ] );
 diff --git a/src/game/g_bot_util.c b/src/game/g_bot_util.c
-index 1bc8b5c..16dba83 100644
+index 1bc8b5c..44b2b9d 100644
 --- a/src/game/g_bot_util.c
 +++ b/src/game/g_bot_util.c
-@@ -135,6 +135,10 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
+@@ -106,6 +106,34 @@ int botGetAngleToTarget( gentity_t *self, gentity_t *target ) {
+ 	return botGetAngleToPoint( self , target->s.pos.trBase );
+ }
+ 
++/**
++ * Overmind: turn a bot's view towards an angle at a human-like speed instead of
++ * snapping to it in one server frame. degPerSec is the most it may turn per second.
++ * @param self [gentity_t] a BOT
++ * @param axis PITCH or YAW
++ * @param target wanted view angle in degrees
++ * @param degPerSec turn speed limit
++ */
++void botTurnTowards( gentity_t *self, int axis, float target, float degPerSec ) {
++	float current = SHORT2ANGLE( self->client->ps.delta_angles[ axis ] );
++	float diff = AngleNormalize180( target - current );
++	int msec = level.time - level.previousTime;
++	float step;
++
++	if( msec <= 0 || msec > 200 ) msec = 50;
++	step = degPerSec * msec / 1000.0f;
++	if( diff > step ) diff = step;
++	else if( diff < -step ) diff = -step;
++	self->client->ps.delta_angles[ axis ] = ANGLE2SHORT( current + diff );
++}
++/**
++ * Overmind: aiming turn speed for a bot, 1 (sloppy) .. 10 (sharp): ~195..600 deg/s
++ */
++float botAimTurnSpeed( gentity_t *self ) {
++	int skill = ( self->bot && self->bot->skill > 0 ) ? self->bot->skill : 5;
++	return 150.0f + 45.0f * skill;
++}
++
+ /*
+  * Bot AIM at target
+  * Perform calculations on where to shoot / attack
+@@ -135,6 +163,10 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
  	VectorAdd( targetStraight, targetUp, dirToTarget );
  
  	wobble = (target->s.eType == ET_BUILDABLE ? 0 : BOT_WOBBLE);// + self->bot->var.angleToTarget;
@@ -440,6 +508,22 @@ index 1bc8b5c..16dba83 100644
  	if(self->client->ps.eFlags & EF_POISONCLOUDED) {
  		wobble += G_Rand();
  	}
+@@ -143,11 +175,13 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
+ 
+ 	// Grab the angles to use with delta_angles
+ 	vectoangles( dirToTarget, angleToTarget );
++	// Overmind: turn at a skill-dependent speed - snapping in one frame looked robotic
++	// and made every bot a perfect flick shot
+ 	if(pitch) {
+ 		//self->bot->move.lookat[ PITCH ] = ANGLE2SHORT( angleToTarget[ PITCH ] );
+-		self->client->ps.delta_angles[ PITCH ] = ANGLE2SHORT( angleToTarget[ PITCH ] );
++		botTurnTowards( self, PITCH, angleToTarget[ PITCH ], botAimTurnSpeed( self ) );
+ 	}
+-	self->client->ps.delta_angles[ YAW ] = ANGLE2SHORT( angleToTarget[ YAW ] );
++	botTurnTowards( self, YAW, angleToTarget[ YAW ], botAimTurnSpeed( self ) );
+ 	//self->bot->move.lookat[ YAW ] = ANGLE2SHORT( angleToTarget[ YAW ] );
+ 	//self->client->ps.delta_angles[ ROLL ] = ANGLE2SHORT( angleToTarget[ ROLL ] );
+ 
 diff --git a/src/game/g_buildable.c b/src/game/g_buildable.c
 index 28e37a7..60d6f7b 100644
 --- a/src/game/g_buildable.c

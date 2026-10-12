@@ -199,6 +199,13 @@
       if (key !== last) {
         last = key; hideAt = Date.now() + TUTORIAL_MS;
         if (!shown) { engineCommand(M, 'set cg_tutorial 1'); shown = true; }
+        // no team yet, or a team but no class (and not lying dead): open the game's
+        // team / spawn menu right away - the server only sends it on an attack press
+        var ks = M._Overmind_State ? M._Overmind_State() : 0;
+        if (s.length >= 3 && s[1] === '0' && s[2] !== '5' && (ks & 0x100) && !(ks & 0x7)) {
+          engineCommand(M, '+attack');
+          setTimeout(function () { engineCommand(M, '-attack'); }, 120);
+        }
       } else if (shown && Date.now() > hideAt) {
         engineCommand(M, 'set cg_tutorial 0'); shown = false;
       }
