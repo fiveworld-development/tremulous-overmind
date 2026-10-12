@@ -7,6 +7,10 @@
 <meta name="description" content="Play Tremulous free in your browser. No download, no account. Aliens vs humans, base building, evolving classes. Two public servers, PC, tablet and phone. Presented by WebNova360.">
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tremulous">
 <link rel="canonical" href="https://webnova360.com%BASE%">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Tremulous – play it in your browser">
@@ -71,6 +75,9 @@
         <span role="cell"><button type="button" class="join" data-server="2">Join</button></span>
       </div>
     </div>
+    <label class="callsign">Your name
+      <input id="callsign" type="text" maxlength="20" autocomplete="nickname" autocapitalize="off" spellcheck="false" placeholder="Player">
+    </label>
     <p class="note">Bring a friend: share the link and join the same server.</p>
   </section>
 
@@ -84,6 +91,7 @@
       <h3>Humans</h3>
       <p>Spawn with a rifle and a construction kit. Credits from kills buy shotguns, lasguns, flamers, armour and jetpacks at the armoury. The Reactor powers everything; turrets and medistations keep the base alive.</p>
     </div>
+    <p class="touch-hint">On touch: your left thumb walks, your right thumb looks around. Hold <b>Fire</b> and slide to aim while shooting. <b>Use</b> evolves, builds and opens the armoury. Tap <b>Look</b> to change the aim speed. Best in landscape – add the page to your home screen for full screen.</p>
     <dl class="keys">
       <div><dt>W A S D</dt><dd>move</dd></div>
       <div><dt>Mouse</dt><dd>aim · left fire · right secondary</dd></div>
@@ -99,7 +107,7 @@
   <section class="block faq">
     <h2 class="frame-title">Questions</h2>
     <details><summary>Is it free?</summary><p>Yes. Tremulous is free and open source, and so is this edition. No ads in the game, no account.</p></details>
-    <details><summary>Does it work on my phone?</summary><p>It runs on recent phones and tablets with Chrome, Safari or Firefox; on-screen touch controls are in the works. The first start loads about 250&nbsp;MB of game data, after that it comes from the browser cache.</p></details>
+    <details><summary>Does it work on my phone?</summary><p>Yes. On phones and tablets you get on-screen controls made for thumbs, in Chrome, Safari or Firefox. Turn the device sideways; on iPhone, adding the page to the home screen gives you full screen. The first start loads about 250&nbsp;MB of game data, after that it comes from the browser cache.</p></details>
     <details><summary>Can I play with friends on the original game?</summary><p>Browsers can't open the UDP connections the desktop game uses, so these servers are web-only. Everyone just opens this page.</p></details>
     <details><summary>Is there always a match?</summary><p>Yes. When a server is short of people, AI players take the free seats so every round is a full one, and they step aside as more players join.</p></details>
     <details><summary>Who is behind this?</summary><p>Tremulous was made by Dark Legion Development and kept alive by GrangerHub. Justin Luong and Auriga ported it to the web. <a href="https://webnova360.com/?ref=tremulous" rel="noopener">WebNova360</a> runs these servers, the AI players and the fixes. Everything is on GitHub.</p></details>
@@ -121,10 +129,13 @@
       <p id="splash-msg" class="msg">Loading game…</p>
     </div>
   </div>
+  <div id="touch" class="touch" hidden></div>
+  <div class="rotate" role="status"><p><b>⟳</b>Turn your device sideways</p></div>
   <button id="exit" class="exit" type="button" aria-label="Leave game" title="Leave game">×</button>
 </div>
 
 <noscript><p class="noscript">Tremulous needs JavaScript and WebGL 2.</p></noscript>
+<script src="%BASE%touch.js" defer></script>
 <script src="%BASE%play.js" defer></script>
 </body>
 </html>

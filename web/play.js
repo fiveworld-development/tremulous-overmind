@@ -3,7 +3,8 @@
   'use strict';
 
   var BASE = '%BASE%';
-  var isTouch = matchMedia('(pointer: coarse)').matches;
+  // touch-first devices get the on-screen controls (?touch=1 forces them for testing)
+  var isTouch = matchMedia('(pointer: coarse)').matches || /[?&]touch=1\b/.test(location.search);
   var started = false;
   var engine = null;
 
@@ -46,21 +47,27 @@
     }
     started = true;
     game.hidden = false;
+    game.classList.toggle('touch-on', isTouch);
     document.body.style.overflow = 'hidden';
-    if (isTouch && game.requestFullscreen) game.requestFullscreen({ navigationUI: 'hide' }).catch(function () {});
+    if (isTouch && game.requestFullscreen) {
+      game.requestFullscreen({ navigationUI: 'hide' }).then(function () {
+        if (screen.orientation && screen.orientation.lock) return screen.orientation.lock('landscape');
+      }).catch(function () { /* iPhone: no element fullscreen, the rotate hint covers portrait */ });
+    }
     progress(8, 'Loading engine…');
 
+    var size = renderSize();
     var args = [
       // quoted: the engine's command parser treats a bare "//" as a comment
       '+set', 'fs_cdn', '"' + location.origin + BASE + 'assets"',
       '+set', 'fs_basepath', 'tremulous_base',
       '+set', 'fs_homepath', 'tremulous_home',
       '+set', 'cl_allowDownload', '0',
-      // render at the real window size (the engine only reads it at start; later
-      // resizes/rotations are stretched by CSS, see style.css)
+      '+set', 'name', '"' + playerName() + '"',
+      // render at the play area's size; later resizes go through Overmind_Resize
       '+set', 'r_mode', '-1',
-      '+set', 'r_customwidth', String(Math.min(frame.offsetWidth || innerWidth, 2560)),
-      '+set', 'r_customheight', String(Math.min(frame.offsetHeight || innerHeight, 1600))
+      '+set', 'r_width', String(size[0]), '+set', 'r_height', String(size[1]),
+      '+set', 'r_customwidth', String(size[0]), '+set', 'r_customheight', String(size[1])
     ];
     if (server) args.push('+connect', 'overmind-' + server);
 
@@ -70,9 +77,7 @@
     ['width', 'height', 'availWidth', 'availHeight'].forEach(function (k) {
       var h = /height/i.test(k);
       try {
-        Object.defineProperty(screen, k, { configurable: true, get: function () {
-          return h ? (frame.offsetHeight || innerHeight) : (frame.offsetWidth || innerWidth);
-        } });
+        Object.defineProperty(screen, k, { configurable: true, get: function () { return renderSize()[h ? 1 : 0]; } });
       } catch (e) { /* engine falls back to the real screen size */ }
     });
 
@@ -85,16 +90,69 @@
         // Every socket goes to our own gateway; the engine never sees a raw host.
         websocket: { url: wsUrl(server || 1), subprotocol: 'binary' },
         onRuntimeInitialized: function () {
+          var M = this;
+          engineModule = M;
           progress(85, 'Downloading game data…');
-          this.callMain(args);
+          M.callMain(args);
           // keep the brand splash up for a moment, then hand over to the engine loader
           var wait = Math.max(0, 1400 - (performance.now() - t0));
           setTimeout(function () { progress(100); splash.classList.add('done'); }, wait);
+          if (isTouch) attachTouch(M, 0);
         }
       });
     }).catch(function (e) {
       progress(100, 'Could not start: ' + e.message + '. Reload to try again.');
     });
+  }
+
+  var engineModule = null;
+
+  // touch layer needs the canvas and an engine with the Overmind_* API
+  function attachTouch(M, tries) {
+    if (frame.querySelector('canvas') && M._Overmind_Action && window.OvermindTouch) {
+      window.OvermindTouch.attach(frame, M);
+    } else if (tries < 100) {
+      setTimeout(function () { attachTouch(M, tries + 1); }, 200);
+    }
+  }
+
+  // render size: the play area in CSS pixels, capped so huge monitors don't
+  // turn into a CPU/GPU benchmark (CSS stretches the rest)
+  function renderSize() {
+    var w = frame.offsetWidth || innerWidth, h = frame.offsetHeight || innerHeight;
+    var k = Math.min(1, 1920 / w, 1200 / h);
+    return [Math.round(w * k), Math.round(h * k)];
+  }
+
+  // follow window resizes, rotation and fullscreen changes once they settle
+  var resizeTimer = 0;
+  function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (!engineModule || !engineModule._Overmind_Resize || game.hidden) return;
+      var s = renderSize();
+      engineModule._Overmind_Resize(s[0], s[1]);
+    }, 400);
+  }
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  document.addEventListener('fullscreenchange', onResize);
+
+  // name: typed on the page (phones have no keyboard in game), remembered locally
+  var nameInput = document.getElementById('callsign');
+  function storedName() { try { return localStorage.getItem('overmind.name') || ''; } catch (e) { return ''; } }
+  function playerName() {
+    var n = cleanName(nameInput ? nameInput.value : '') || cleanName(storedName());
+    if (!n) n = 'Player' + (1000 + Math.floor(Math.random() * 9000));
+    try { localStorage.setItem('overmind.name', n); } catch (e) { /* private mode */ }
+    return n;
+  }
+  function cleanName(s) {
+    return String(s || '').replace(/[^A-Za-z0-9 _.\-\[\]()!?#*+=:]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+  }
+  if (nameInput) {
+    nameInput.value = storedName();
+    nameInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') start(1); });
   }
 
 
