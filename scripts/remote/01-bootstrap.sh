@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time host setup: packages, unprivileged service user, sources.
 set -euo pipefail
+cd /   # sudo -u trem cannot stat the caller's home
 B=/opt/tremulous
 export DEBIAN_FRONTEND=noninteractive
 

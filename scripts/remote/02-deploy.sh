@@ -3,6 +3,7 @@
 # usage: 02-deploy.sh <public host name> [git ref] [nightly|local]
 #   needs: 01-bootstrap.sh done (user "trem", /opt/tremulous, sources)
 set -euo pipefail
+cd /   # sudo -u trem cannot stat the caller's home
 HOST_NAME=${1:?host name, e.g. play.webnova360.com}
 REF=${2:-main}
 ARTIFACTS=${3:-${ARTIFACTS:-nightly}}   # nightly | local
@@ -43,8 +44,8 @@ sudo -n test -f "$DL/client/tremulous.wasm" && CLIENT_ARG="--client '$DL/client'
 
 echo "== dedicated server"
 as_trem mkdir -p "$B/server/gpp"
-as_trem install -m 0750 "$(ls "$DL"/server/tremded* | head -1)" "$B/server/tremded"
-for pk3 in "$B"/src/web-stack/tremulous_assets/*.pk3; do
+as_trem install -m 0750 "$(sudo -n find "$DL/server" -maxdepth 1 -name 'tremded*' | head -1)" "$B/server/tremded"
+for pk3 in $(sudo -n find "$B/src/web-stack/tremulous_assets" -name '*.pk3'); do
     as_trem ln -sf "$pk3" "$B/server/gpp/$(basename "$pk3")"
 done
 for i in 1 2; do
@@ -69,7 +70,7 @@ as_trem mkdir -p "$B/build/pk3" "$B/web/releases"
 as_trem bash -c "cd '$O' && node scripts/build-web.js --stack '$B/src/web-stack' $CLIENT_ARG \
     --pk3 '$B/build/pk3' --out '$REL' --base /play-tremulous/"
 # the servers need our paks too (pure servers only accept paks they have)
-as_trem cp "$B"/build/pk3/*.pk3 "$B/server/gpp/"
+as_trem bash -c "cp '$B'/build/pk3/*.pk3 '$B/server/gpp/'"
 as_trem ln -sfn "$REL" "$B/web/current"
 sudo -n chmod 0755 "$B" "$B/web"
 sudo -n chgrp -R www-data "$B/web"
