@@ -100,9 +100,10 @@ function main() {
     const wasmName = `tremulous.${crc32(wasm).toString(36)}.wasm`;
     fs.writeFileSync(path.join(out, wasmName), wasm);
     let js = fs.readFileSync(path.join(clientBin, 'tremulous.js'), 'utf8');
-    if (!js.includes("'tremulous.wasm'")) throw new Error('wasm file name not found in tremulous.js');
-    js = js.replaceAll("'tremulous.wasm'", `'${wasmName}'`);
-    const anchor = /(\{\s*src:"map-base-a51_b2\.pk3",\s*dest:"gpp\/map-base-a51_b2\.pk3",\s*checksum:\d+,\s*\})/;
+    // older emscripten quotes the name with ', newer with "
+    if (!/(['"])tremulous\.wasm\1/.test(js)) throw new Error('wasm file name not found in tremulous.js');
+    js = js.replace(/(['"])tremulous\.wasm\1/g, `$1${wasmName}$1`);
+    const anchor = /(\{\s*src:"map-base-a51_b2\.pk3",\s*dest:"gpp\/map-base-a51_b2\.pk3",\s*checksum:\d+,?\s*\})/;
     if (!anchor.test(js)) throw new Error('asset list anchor not found in tremulous.js');
     const extra = manifest
         .filter(e => ours.has(e.name) && !js.includes(`src:"${e.name}"`))

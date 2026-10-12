@@ -7,5 +7,6 @@ $body = [IO.File]::ReadAllText((Resolve-Path $Script)) -replace "`r", '' -replac
 # base64 on the command line: PowerShell 5.1 pipes to native programs with a BOM and CRLF
 $b64 = [Convert]::ToBase64String((New-Object Text.UTF8Encoding($false)).GetBytes($body))
 $argline = ($Args | % { "'" + ($_ -replace "'", "'\''") + "'" }) -join ' '
-ssh -i $cfg.Key -o BatchMode=yes -o IdentitiesOnly=yes $cfg.Target "echo $b64 | base64 -d > /tmp/trem-remote.sh && bash /tmp/trem-remote.sh $argline; rc=`$?; rm -f /tmp/trem-remote.sh; exit `$rc"
+# one file per run: bash reads scripts lazily, so two runs sharing a path corrupt each other
+ssh -i $cfg.Key -o BatchMode=yes -o IdentitiesOnly=yes $cfg.Target "f=`$(mktemp /tmp/trem-remote.XXXXXX); echo $b64 | base64 -d > `$f && bash `$f $argline; rc=`$?; rm -f `$f; exit `$rc"
 exit $LASTEXITCODE
