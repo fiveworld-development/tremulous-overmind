@@ -8,6 +8,7 @@ ENGINE_REF=00555626cd3e9da2dc9e2b6e608055261e15c21a
 REPO=https://github.com/fiveworld-development/tremulous-overmind
 as_trem() { sudo -n -u trem -H env HOME="$B" "$@"; }
 J="nice -n 15 make -j2"
+S="nice -n 15 make"   # a failed parallel build is retried serially (the Makefiles race now and then)
 
 sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     build-essential zlib1g-dev rsync >/dev/null
@@ -23,11 +24,11 @@ for p in $(sudo -n find "$W/overmind/patches/engine" -name '*.patch' | sort); do
 for p in $(sudo -n find "$W/overmind/patches/bots" -name '*.patch' | sort); do echo "== $(basename "$p")"; as_trem git -C "$W/bots"   apply --whitespace=nowarn "$p"; done
 
 echo "== tremded"
-as_trem bash -c "cd '$W/engine' && $J release BUILD_CLIENT=0 BUILD_SERVER=1 BUILD_GAME_SO=0 BUILD_GAME_QVM=0 > '$W/engine.log' 2>&1" \
+as_trem bash -c "cd '$W/engine' && A='release BUILD_CLIENT=0 BUILD_SERVER=1 BUILD_GAME_SO=0 BUILD_GAME_QVM=0' && { $J \$A || $S \$A; } > '$W/engine.log' 2>&1" \
     || { sudo -n tail -40 "$W/engine.log"; exit 1; }
 echo "== game.qvm (bots)"
-as_trem bash -c "cd '$W/bots' && $J release BUILD_CLIENT=0 BUILD_CLIENT_SMP=0 BUILD_SERVER=0 BUILD_GAME_SO=0 \
-    BUILD_GAME_QVM=1 USE_CURL=0 USE_OPENAL=0 USE_CODEC_VORBIS=0 TOOLS_OPTIMIZE=-std=gnu99 > '$W/bots.log' 2>&1" \
+as_trem bash -c "cd '$W/bots' && A='release BUILD_CLIENT=0 BUILD_CLIENT_SMP=0 BUILD_SERVER=0 BUILD_GAME_SO=0 \
+    BUILD_GAME_QVM=1 USE_CURL=0 USE_OPENAL=0 USE_CODEC_VORBIS=0 TOOLS_OPTIMIZE=-std=gnu99' && { $J \$A || $S \$A; } > '$W/bots.log' 2>&1" \
     || { sudo -n tail -40 "$W/bots.log"; exit 1; }
 
 D="$B/build/dist/server"
