@@ -18,7 +18,7 @@ as_trem() { sudo -n -u trem -H env HOME="$B" "$@"; }
 as_trem git lfs install --skip-repo >/dev/null
 
 clone() { # url dir [lfs]
-    if [ -d "$B/src/$2/.git" ]; then as_trem git -C "$B/src/$2" pull -q --ff-only
+    if sudo -n test -d "$B/src/$2/.git"; then as_trem git -C "$B/src/$2" pull -q --ff-only
     else as_trem git clone -q --depth 1 "$1" "$B/src/$2"; fi
 }
 clone https://github.com/justinl1996/tremulous.git engine

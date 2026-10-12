@@ -13,7 +13,7 @@ B=/opt/tremulous
 as_trem() { sudo -n -u trem -H env HOME="$B" "$@"; }
 
 echo "== repo ($REF)"
-if [ -d "$B/src/overmind/.git" ]; then
+if sudo -n test -d "$B/src/overmind/.git"; then
     as_trem git -C "$B/src/overmind" fetch -q origin "$REF"
     as_trem git -C "$B/src/overmind" checkout -q --detach FETCH_HEAD
 else
@@ -59,7 +59,7 @@ for i in 1 2; do
 done
 
 echo "== websocket gateway"
-[ -x "$B/venv/bin/websockify" ] || {
+sudo -n test -x "$B/venv/bin/websockify" || {
     as_trem python3 -m venv "$B/venv"
     as_trem "$B/venv/bin/pip" install -q "git+https://github.com/justinl1996/websockify.git@$WEBSOCKIFY_COMMIT"
 }
@@ -92,7 +92,7 @@ done
 sudo -n systemctl enable -q --now tremulous-status.timer
 
 echo "== nginx"
-if [ ! -f /etc/ssl/tremulous/origin.crt ]; then
+if ! sudo -n test -f /etc/ssl/tremulous/origin.crt; then
     # Cloudflare "Full" mode accepts a self-signed origin certificate; replace with a
     # Cloudflare Origin CA cert for "Full (strict)".
     sudo -n install -d -m 0750 /etc/ssl/tremulous
