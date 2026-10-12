@@ -24,15 +24,16 @@ def query(port, size):
     lines = data.decode("latin-1").split("\n")
     parts = lines[1].split("\\")[1:]
     info = dict(zip(parts[0::2], parts[1::2]))
-    players = [l for l in lines[2:] if l.strip()]
-    # bot names carry the [BOT] tag (g_bot_tagname 1)
-    humans = sum(1 for p in players if "[BOT]" not in p)
+    # only real players are engine clients and get a line here; bots live in the
+    # game module, but "P" has one char per slot ("-" = empty, digit = team)
+    humans = sum(1 for l in lines[2:] if l.strip())
+    players = max(sum(1 for c in info.get("P", "") if c != "-"), humans)
     return {
         "online": True,
         "map": info.get("mapname", "?"),
         "humans": humans,
-        "bots": len(players) - humans,
-        "players": len(players),
+        "bots": players - humans,
+        "players": players,
         "max": size,
     }
 

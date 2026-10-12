@@ -1,5 +1,5 @@
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
-index f68a52a..f4f0f67 100644
+index f68a52a..c36de85 100644
 --- a/src/game/g_bot.c
 +++ b/src/game/g_bot.c
 @@ -80,23 +80,19 @@ qboolean G_BotAdd( char *name, team_t team ) {
@@ -105,57 +105,57 @@ index f68a52a..f4f0f67 100644
 -		"ZeroSystem", 
 -		"CltrAltDel", 
 -		"OptimusPrime", 
++		"kesh",
 +		"Fringe",
-+		"Kesh",
 +		"Ditto",
-+		"Chiaka",
++		"chiaka",
 +		"Shinsho",
-+		"Watto",
++		"watto",
 +		"Klaatu",
-+		"Tarantula",
++		"tarantula",
 +		"BlackWidow",
-+		"MoonWalker",
++		"moonwalker",
 +		"Mufasa",
-+		"Armadillo",
++		"armadillo",
 +		"Godzilla",
-+		"Nyx",
++		"nyx",
 +		"Vesper",
-+		"Scuttle",
-+		"Hivemind",
-+		"Spore",
++		"scuttle",
++		"SporeLord",
 +		"Talon",
-+		"Wraith",
-+		"Chitin",
++		"wraith",
++		"chitin",
 +		"Mandible",
-+		"Rift",
-+		"Venom",
++		"rift",
++		"venom",
 +		"Grimclaw",
++		"dretchling",
 +		//------------ HUMANS
 +		"Quorra",
-+		"C-Tron",
-+		"SegFault",
++		"c-tron",
++		"segfault",
 +		"Tenshion",
-+		"Johnny5",
++		"johnny5",
 +		"NorthPark",
-+		"CoreDump",
++		"coredump",
 +		"FuzzyLogic",
 +		"ZeroSystem",
-+		"OptimusPrime",
 +		"Halcyon",
-+		"Kestrel",
++		"kestrel",
 +		"Ironside",
-+		"Vector",
++		"vector",
 +		"Bishop",
-+		"Ripley",
++		"ripley",
 +		"Hicks",
-+		"Vasquez",
++		"vasquez",
 +		"Sentinel",
-+		"Maverick",
++		"maverick",
 +		"Oxide",
-+		"Torque",
++		"torque",
 +		"Kepler",
-+		"Nomad",
++		"nomad",
 +		"Rook",
++		"Ferro",
  	};
  	int reservedSlots = trap_Cvar_VariableIntegerValue( "sv_privateclients" );
  	ini = team == TEAM_ALIENS ? 0 : 25;
@@ -229,6 +229,20 @@ index 2e09378..3d420d1 100644
  void G_BotDelRandom ( team_t team );
  
  // g_bot_nav.c
+diff --git a/src/game/g_bot_common.c b/src/game/g_bot_common.c
+index 5a888c9..27e0f02 100644
+--- a/src/game/g_bot_common.c
++++ b/src/game/g_bot_common.c
+@@ -453,8 +453,7 @@ void BotExplore( gentity_t *self ){
+  * @param self
+  */
+ void BotIdle( gentity_t *self ){
+-	//set Bot's ping
+-	self->client->ps.ping = G_Rand_Range(100, 200);
++	//ping is kept per bot in G_RunFrame (g_main.c)
+ }
+ /**
+  * Bot will attack to a target
 diff --git a/src/game/g_bot_util.c b/src/game/g_bot_util.c
 index 1bc8b5c..16dba83 100644
 --- a/src/game/g_bot_util.c
@@ -244,42 +258,275 @@ index 1bc8b5c..16dba83 100644
  	if(self->client->ps.eFlags & EF_POISONCLOUDED) {
  		wobble += G_Rand();
  	}
+diff --git a/src/game/g_buildable.c b/src/game/g_buildable.c
+index 28e37a7..e824f71 100644
+--- a/src/game/g_buildable.c
++++ b/src/game/g_buildable.c
+@@ -4381,3 +4381,217 @@ void G_BuildLogRevert( int id )
+   }
+ }
+ 
++
++/*
++============
++Bot base building (Tremulous Overmind)
++
++The P-Bot AI fights, evolves and buys but never builds, so bases stayed as the map
++spawned them. Every few seconds each team's bots grow their base the way a human
++builder would: pick the next structure from a build order, look for a spot near
++the base and run it through the normal player build checks (build points, power,
++creep, room, permissions) and G_Build(), so it rises with the usual construction
++time and shows up in the build log under a bot's name.
++============
++*/
++
++typedef struct
++{
++  buildable_t buildable;
++  int         count;     // build until the team has this many
++} botBuildStep_t;
++
++static const botBuildStep_t botHumanPlan[ ] =
++{
++  { BA_H_SPAWN, 2 }, { BA_H_MGTURRET, 2 }, { BA_H_ARMOURY, 1 }, { BA_H_MEDISTAT, 1 },
++  { BA_H_MGTURRET, 4 }, { BA_H_SPAWN, 3 }, { BA_H_DCC, 1 }, { BA_H_TESLAGEN, 2 },
++  { BA_H_MGTURRET, 6 }, { BA_H_TESLAGEN, 4 }, { BA_H_SPAWN, 4 }
++};
++
++static const botBuildStep_t botAlienPlan[ ] =
++{
++  { BA_A_SPAWN, 2 }, { BA_A_ACIDTUBE, 2 }, { BA_A_ACIDTUBE, 4 }, { BA_A_SPAWN, 3 },
++  { BA_A_TRAPPER, 2 }, { BA_A_BOOSTER, 1 }, { BA_A_HIVE, 1 }, { BA_A_ACIDTUBE, 6 },
++  { BA_A_BARRICADE, 2 }, { BA_A_HIVE, 2 }, { BA_A_SPAWN, 4 }
++};
++
++static int G_BotCountBuildables( team_t team, buildable_t buildable, gentity_t **any )
++{
++  int       i, n = 0, seen = 0;
++  gentity_t *ent;
++
++  for( i = MAX_CLIENTS, ent = g_entities + i; i < level.num_entities; i++, ent++ )
++  {
++    if( ent->s.eType != ET_BUILDABLE || ent->buildableTeam != team || ent->health <= 0 )
++      continue;
++    if( ent->s.modelindex == buildable )
++      n++;
++    // reservoir-sample a random team structure to build around
++    if( any && rand( ) % ++seen == 0 )
++      *any = ent;
++  }
++  return n;
++}
++
++static gentity_t *G_BotPickBuilder( team_t team )
++{
++  int       i, seen = 0;
++  gentity_t *ent, *pick = NULL;
++
++  for( i = 0, ent = g_entities; i < level.maxclients; i++, ent++ )
++  {
++    if( !ent->inuse || !ent->client || !( ent->r.svFlags & SVF_BOT ) )
++      continue;
++    if( ent->client->ps.stats[ STAT_TEAM ] != team || ent->health <= 0 ||
++        ent->client->sess.spectatorState != SPECTATOR_NOT )
++      continue;
++    if( rand( ) % ++seen == 0 )
++      pick = ent;
++  }
++  return pick;
++}
++
++/*
++ * Try to place one buildable near "around". The builder's player state is swapped
++ * for a standing builder looking at a random spot, so G_CanBuild() runs exactly as
++ * for a real player standing there; it is restored afterwards.
++ */
++static qboolean G_BotTryBuildAt( gentity_t *builder, buildable_t buildable, gentity_t *around )
++{
++  playerState_t saved;
++  vec3_t        eye, ground, origin, normal, start;
++  trace_t       tr;
++  float         ang, dist;
++  int           attempt;
++  qboolean      built = qfalse;
++  team_t        team = builder->client->ps.stats[ STAT_TEAM ];
++
++  saved = builder->client->ps;
++
++  for( attempt = 0; attempt < 8 && !built; attempt++ )
++  {
++    ang = ( rand( ) % 360 ) * M_PI / 180.0f;
++    dist = 120 + rand( ) % 380;
++    VectorCopy( around->s.origin, start );
++    start[ 2 ] += 48;
++    eye[ 0 ] = start[ 0 ] + cos( ang ) * dist;
++    eye[ 1 ] = start[ 1 ] + sin( ang ) * dist;
++    eye[ 2 ] = start[ 2 ];
++
++    // stay in sight of the base, no building through walls
++    trap_Trace( &tr, start, NULL, NULL, eye, ENTITYNUM_NONE, MASK_PLAYERSOLID );
++    if( tr.fraction < 1.0f || tr.startsolid )
++      continue;
++
++    // stand on the floor there
++    VectorCopy( eye, ground );
++    ground[ 2 ] -= 256;
++    trap_Trace( &tr, eye, NULL, NULL, ground, ENTITYNUM_NONE, MASK_PLAYERSOLID );
++    if( tr.fraction == 1.0f || tr.startsolid || tr.plane.normal[ 2 ] < 0.7f )
++      continue;
++
++    builder->client->ps.origin[ 0 ] = tr.endpos[ 0 ];
++    builder->client->ps.origin[ 1 ] = tr.endpos[ 1 ];
++    builder->client->ps.origin[ 2 ] = tr.endpos[ 2 ] + 40;
++    builder->client->ps.viewangles[ PITCH ] = 0;
++    builder->client->ps.viewangles[ YAW ] = rand( ) % 360;
++    builder->client->ps.viewangles[ ROLL ] = 0;
++    builder->client->ps.stats[ STAT_CLASS ] =
++      ( team == TEAM_ALIENS ) ? PCL_ALIEN_BUILDER0_UPG : PCL_HUMAN;
++    builder->client->ps.stats[ STAT_STATE ] &= ~SS_WALLCLIMBING;
++    builder->client->ps.eFlags &= ~EF_WALLCLIMB;
++
++    if( G_CanBuild( builder, buildable, 0, origin, normal ) == IBE_NONE &&
++        level.numBuildablesForRemoval == 0 )
++    {
++      vec3_t angles;
++
++      VectorSet( angles, 0, builder->client->ps.viewangles[ YAW ], 0 );
++      builder->client->ps = saved;
++      G_Build( builder, buildable, origin, normal, angles );
++      built = qtrue;
++    }
++    level.numBuildablesForRemoval = 0;
++  }
++
++  builder->client->ps = saved;
++  return built;
++}
++
++static void G_BotBuildForTeam( team_t team )
++{
++  const botBuildStep_t *plan;
++  int                  steps, i, stage;
++  gentity_t            *builder, *around = NULL, *core;
++  buildable_t          coreType;
++
++  builder = G_BotPickBuilder( team );
++  if( !builder )
++    return;
++
++  if( team == TEAM_ALIENS )
++  {
++    plan = botAlienPlan;
++    steps = ARRAY_LEN( botAlienPlan );
++    stage = g_alienStage.integer;
++    coreType = BA_A_OVERMIND;
++    core = G_Overmind( );
++  }
++  else
++  {
++    plan = botHumanPlan;
++    steps = ARRAY_LEN( botHumanPlan );
++    stage = g_humanStage.integer;
++    coreType = BA_H_REACTOR;
++    core = G_Reactor( );
++  }
++
++  G_BotCountBuildables( team, BA_NONE, &around );
++  if( !around )
++    return; // nothing left to build around: the team is on its last legs
++
++  // a lost core comes first, like any sane builder would do
++  if( !core )
++  {
++    G_BotTryBuildAt( builder, coreType, around );
++    return;
++  }
++
++  for( i = 0; i < steps; i++ )
++  {
++    if( !BG_BuildableAllowedInStage( plan[ i ].buildable, stage ) ||
++        !BG_BuildableIsAllowed( plan[ i ].buildable ) )
++      continue;
++    if( G_BotCountBuildables( team, plan[ i ].buildable, NULL ) >= plan[ i ].count )
++      continue;
++    // build next to the core most of the time so bases look like bases
++    G_BotTryBuildAt( builder, plan[ i ].buildable, ( rand( ) % 3 ) ? core : around );
++    return;
++  }
++}
++
++/*
++============
++G_BotBaseBuild
++
++Called every frame from G_RunFrame; paces itself like a human builder.
++============
++*/
++void G_BotBaseBuild( void )
++{
++  static int nextBuild[ NUM_TEAMS ];
++  team_t     team;
++
++  if( !g_bot.integer || !g_bot_build.integer || level.intermissiontime )
++    return;
++
++  for( team = TEAM_ALIENS; team <= TEAM_HUMANS; team++ )
++  {
++    if( level.time < nextBuild[ team ] - 60000 )
++      nextBuild[ team ] = 0; // new map
++    if( level.time < nextBuild[ team ] || level.time - level.startTime < 5000 )
++      continue;
++    nextBuild[ team ] = level.time + 6000 + rand( ) % 8000;
++    G_BotBuildForTeam( team );
++  }
++}
 diff --git a/src/game/g_local.h b/src/game/g_local.h
-index 78f9272..523c17f 100644
+index 78f9272..c3d3048 100644
 --- a/src/game/g_local.h
 +++ b/src/game/g_local.h
-@@ -1254,6 +1254,8 @@ extern  vmCvar_t  g_bot_step_aim;  //bots aim is not instant (experimental)
+@@ -814,6 +814,7 @@ qboolean          G_IsDCCBuilt( void );
+ int               G_FindDCC( gentity_t *self );
+ gentity_t         *G_Reactor( void );
+ gentity_t         *G_Overmind( void );
++void              G_BotBaseBuild( void );
+ qboolean          G_FindCreep( gentity_t *self );
+ 
+ void              G_BuildableThink( gentity_t *ent, int msec );
+@@ -1254,6 +1255,9 @@ extern  vmCvar_t  g_bot_step_aim;  //bots aim is not instant (experimental)
  extern  vmCvar_t  g_bot_skins;  //enable skins for bots :)
  extern  vmCvar_t  g_bot_join;  //disable bots join
  extern  vmCvar_t  g_bot_minPerTeam;  //minimum bots per team
 +extern  vmCvar_t  g_bot_fillTeam;  //N vs N look with one open seat (0 = off)
 +extern  vmCvar_t  g_bot_skill;  //0 = random per map, 1..10 = fixed
++extern  vmCvar_t  g_bot_build;  //bots grow their team's base
  
  extern  vmCvar_t  g_bot_debug_verbosity;
  extern  vmCvar_t  g_bot_debug_type;
 diff --git a/src/game/g_main.c b/src/game/g_main.c
-index c4ea3eb..e47bc52 100644
+index c4ea3eb..85db504 100644
 --- a/src/game/g_main.c
 +++ b/src/game/g_main.c
-@@ -164,6 +164,8 @@ vmCvar_t  g_bot_lcannon;
+@@ -164,6 +164,9 @@ vmCvar_t  g_bot_lcannon;
  //LEPE:(add also in g_local.h)
  
  vmCvar_t  g_bot_minPerTeam;
 +vmCvar_t  g_bot_fillTeam;
 +vmCvar_t  g_bot_skill;
++vmCvar_t  g_bot_build;
  vmCvar_t  g_bot_join;
  vmCvar_t  g_bot_basi;
  vmCvar_t  g_bot_advbasi;
-@@ -252,6 +254,8 @@ static cvarTable_t   gameCvarTable[ ] =
+@@ -252,6 +255,9 @@ static cvarTable_t   gameCvarTable[ ] =
    { &g_bot_tyrant, "g_bot_tyrant", "1", 0, 0, qfalse },
    { &g_bot_join, "g_bot_join", "1", 0, 0, qfalse },
    { &g_bot_minPerTeam, "g_bot_minPerTeam", "2", CVAR_ARCHIVE, 0, qfalse },
 +  { &g_bot_fillTeam, "g_bot_fillTeam", "0", CVAR_ARCHIVE, 0, qfalse },
 +  { &g_bot_skill, "g_bot_skill", "0", CVAR_ARCHIVE, 0, qfalse },
++  { &g_bot_build, "g_bot_build", "1", CVAR_ARCHIVE, 0, qfalse },
    { &g_bot_essence, "g_bot_essence", "1", 0, 0, qfalse },
    { &g_bot_tagname, "g_bot_tagname", "1", 0, 0, qfalse },
    { &g_bot_manual, "g_bot_manual", "0", 0, 0, qfalse },
-@@ -2922,6 +2926,20 @@ void G_RunFrame( int levelTime )
+@@ -2922,6 +2928,29 @@ void G_RunFrame( int levelTime )
    G_CalculateAvgPlayers( );
    G_UpdateZaps( msec );
  
@@ -294,13 +541,22 @@ index c4ea3eb..e47bc52 100644
 +    {
 +      lastDeploy = level.time;
 +      G_DeployBots( );
++
++      // believable pings: each bot keeps its own line quality, with a little jitter
++      for( i = 0; i < level.maxclients; i++ )
++      {
++        gentity_t *b = &g_entities[ i ];
++        if( b->inuse && b->client && ( b->r.svFlags & SVF_BOT ) )
++          b->client->ps.ping = 28 + ( ( i * 37 + level.startTime / 1000 ) % 85 ) + rand( ) % 15;
++      }
 +    }
 +  }
++  G_BotBaseBuild( );
 +
    // see if it is time to end the level
    CheckExitRules( );
  
-@@ -2958,8 +2976,27 @@ void G_DeployBots( void )  {
+@@ -2958,8 +2987,27 @@ void G_DeployBots( void )  {
  	int alien_human_diff = alien_players - human_players;
  	int aliens = g_bot_minPerTeam.integer + level.extraAlienBots - (alien_human_diff < 0 ? alien_human_diff : 0);
  	int humans = g_bot_minPerTeam.integer + level.extraHumanBots + (alien_human_diff > 0 ? alien_human_diff : 0);
