@@ -166,6 +166,43 @@ index 160b735..14f9a00 100644
  
    // build the render lists
    if( !cg.hyperspace )
+diff --git a/src/game/bg_alloc.c b/src/game/bg_alloc.c
+index b145c62..1a04923 100644
+--- a/src/game/bg_alloc.c
++++ b/src/game/bg_alloc.c
+@@ -203,6 +203,20 @@ void BG_DefragmentMemory( void )
+   }
+ }
+ 
++// Overmind: 1 if the free list is intact (diagnostics for the map-change crash)
++int BG_MemoryIntact( void )
++{
++  freeMemNode_t *fmn;
++  int           n = 0;
++
++  for( fmn = freeHead; fmn && n < 100000; fmn = fmn->next, n++ )
++  {
++    if( fmn->cookie != FREEMEMCOOKIE )
++      return 0;
++  }
++  return 1;
++}
++
+ void BG_MemoryInfo( void )
+ {
+   // Give a breakdown of memory
+diff --git a/src/game/bg_public.h b/src/game/bg_public.h
+index 9d081e7..51f4851 100644
+--- a/src/game/bg_public.h
++++ b/src/game/bg_public.h
+@@ -1215,6 +1215,7 @@ void  BG_InitMemory( void );
+ void  BG_Free( void *ptr );
+ void  BG_DefragmentMemory( void );
+ void  BG_MemoryInfo( void );
++int   BG_MemoryIntact( void );
+ 
+ void  BG_EvaluateTrajectory( const trajectory_t *tr, int atTime, vec3_t result );
+ void  BG_EvaluateTrajectoryDelta( const trajectory_t *tr, int atTime, vec3_t result );
 diff --git a/src/game/g_admin.c b/src/game/g_admin.c
 index fcdbfc8..34a8a78 100644
 --- a/src/game/g_admin.c
@@ -861,7 +898,7 @@ index 78f9272..c3d3048 100644
  extern  vmCvar_t  g_bot_debug_verbosity;
  extern  vmCvar_t  g_bot_debug_type;
 diff --git a/src/game/g_main.c b/src/game/g_main.c
-index c4ea3eb..9ef2b7a 100644
+index c4ea3eb..108d51b 100644
 --- a/src/game/g_main.c
 +++ b/src/game/g_main.c
 @@ -164,6 +164,9 @@ vmCvar_t  g_bot_lcannon;
@@ -884,7 +921,35 @@ index c4ea3eb..9ef2b7a 100644
    { &g_bot_essence, "g_bot_essence", "1", 0, 0, qfalse },
    { &g_bot_tagname, "g_bot_tagname", "1", 0, 0, qfalse },
    { &g_bot_manual, "g_bot_manual", "0", 0, 0, qfalse },
-@@ -2580,6 +2586,11 @@ void G_CheckVote( team_t team )
+@@ -374,6 +380,8 @@ Q_EXPORT intptr_t vmMain( int command, int arg0, int arg1, int arg2, int arg3, i
+   {
+     case GAME_INIT:
+       G_InitGame( arg0, arg1, arg2 );
++      if( !BG_MemoryIntact( ) )
++        G_Printf( "MEMCHECK: free list broken after G_InitGame\n" );
+ 	  trap_SendConsoleCommand( EXEC_APPEND, "exec bots.cfg\n" ); 
+       return 0;
+ 
+@@ -1105,8 +1113,10 @@ G_ShutdownGame
+ void G_ShutdownGame( int restart )
+ {
+   // in case of a map_restart
++  if( !BG_MemoryIntact( ) ) G_Printf( "MEMCHECK: broken at shutdown start\n" );
+   G_ClearVotes( );
+   G_BotDelAll( );
++  if( !BG_MemoryIntact( ) ) G_Printf( "MEMCHECK: broken after G_BotDelAll\n" );
+   G_RestoreCvars( );
+ 
+   G_Printf( "==== ShutdownGame ====\n" );
+@@ -1121,6 +1131,7 @@ void G_ShutdownGame( int restart )
+ 
+   // write all the client session data so we can get it back
+   G_WriteSessionData( );
++  if( !BG_MemoryIntact( ) ) G_Printf( "MEMCHECK: broken before G_admin_cleanup\n" );
+ 
+   G_admin_cleanup( );
+   G_namelog_cleanup( );
+@@ -2580,6 +2591,11 @@ void G_CheckVote( team_t team )
      }
    }
  
@@ -896,7 +961,25 @@ index c4ea3eb..9ef2b7a 100644
    if( pass )
      level.voteExecuteTime[ team ] = level.time + level.voteDelay[ team ];
  
-@@ -2922,6 +2933,29 @@ void G_RunFrame( int levelTime )
+@@ -2771,6 +2787,17 @@ void G_RunFrame( int levelTime )
+     return;
+   }
+ 
++  // Overmind diagnostics: report the first frame that finds the free list broken
++  {
++    static int reported;
++    if( !reported && !BG_MemoryIntact( ) )
++    {
++      reported = 1;
++      G_Printf( "MEMCHECK: free list broken at level time %d (frame %d)\n",
++        level.time - level.startTime, level.framenum );
++    }
++  }
++
+   //LEPE: control the essence of paths
+   if( level.essenceFadeTimer > 1000 ) {
+         level.essenceFadeTimer = 0;
+@@ -2922,6 +2949,29 @@ void G_RunFrame( int levelTime )
    G_CalculateAvgPlayers( );
    G_UpdateZaps( msec );
  
@@ -926,7 +1009,7 @@ index c4ea3eb..9ef2b7a 100644
    // see if it is time to end the level
    CheckExitRules( );
  
-@@ -2958,8 +2992,27 @@ void G_DeployBots( void )  {
+@@ -2958,8 +3008,27 @@ void G_DeployBots( void )  {
  	int alien_human_diff = alien_players - human_players;
  	int aliens = g_bot_minPerTeam.integer + level.extraAlienBots - (alien_human_diff < 0 ? alien_human_diff : 0);
  	int humans = g_bot_minPerTeam.integer + level.extraHumanBots + (alien_human_diff > 0 ? alien_human_diff : 0);
