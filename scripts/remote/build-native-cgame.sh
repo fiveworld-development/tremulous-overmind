@@ -23,10 +23,20 @@ SRC="cgame/cg_main.c game/bg_misc.c game/bg_pmove.c game/bg_slidemove.c game/bg_
 CFLAGS="-DCGAME -O3 -msimd128 -fno-strict-aliasing -w -DNDEBUG
         -DPRODUCT_VERSION=\"gpp1\" -DSVN_VERSION=\"\""
 
+# q_platform.h has no emscripten branch: supply what its OS blocks would define
+cat > "$T/ovcg_platform.h" <<'H'
+#define OS_STRING "emscripten"
+#define ARCH_STRING "wasm32"
+#define ID_INLINE inline
+#define PATH_SEP '/'
+#define DLL_EXT ".wasm"
+#define Q3_LITTLE_ENDIAN
+H
+
 compile() {   # <objdir> [extra flags]
     mkdir -p "$1"
     for f in $SRC; do
-        emcc $CFLAGS ${2:-} -c "$S/$f" -o "$1/$(echo "$f" | tr / _).o"
+        emcc $CFLAGS -include "$T/ovcg_platform.h" ${2:-} -c "$S/$f" -o "$1/$(echo "$f" | tr / _).o"
     done
 }
 
@@ -43,6 +53,6 @@ compile "$T/pass2" "-include $T/ovcg_prefix.h"
 rm -f "$OUT"
 emar rcs "$OUT" "$T"/pass2/*.o
 # nothing unprefixed may be left over (would clash with the engine at link time)
-LEFT=$("$NM" --defined-only --extern-only -j "$OUT" 2>/dev/null | grep -E '^[A-Za-z_]' | grep -v -e '^ovcg_' -e '^__' | sort -u || true)
+LEFT=$("$NM" --defined-only --extern-only -j "$OUT" 2>/dev/null | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | grep -v -e '^ovcg_' -e '^__' | sort -u || true)
 [ -z "$LEFT" ] || { echo "unprefixed symbols left: $LEFT"; exit 1; }
 ls -la "$OUT"
