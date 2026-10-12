@@ -1,0 +1,79 @@
+diff --git a/Makefile b/Makefile
+index 614b101..043db81 100644
+--- a/Makefile
++++ b/Makefile
+@@ -790,7 +790,14 @@ ifeq ($(PLATFORM),js)
+   #OPTIMIZEVM += -O3
+   # -O2: the -O1 workaround for issue #8 (random signature mismatch on connect) costs
+   # a lot of speed in the QVM interpreter; drop this patch again if #8 shows up
+-  OPTIMIZEVM += -O2
++  # 0005: -O3 (more inlining/unrolling, wasm-opt -O3 at link) - the QVM interpreter
++  # loop and renderer back end are pure CPU and benefit most. Same #8 caveat as -O2:
++  # if "Function signature mismatch" appears on connect, fall back to -O2.
++  OPTIMIZEVM += -O3
++  # 0005: wasm SIMD (128-bit) lets clang auto-vectorize vector/matrix/skinning loops.
++  # Supported by Chrome 91+, Firefox 89+, Safari 16.4+ (all WebGL2-era browsers).
++  # Pure codegen change, no visual difference.
++  OPTIMIZEVM += -msimd128
+   #OPTIMIZEVM += -O0 -g
+   OPTIMIZE = $(OPTIMIZEVM)
+ 
+@@ -813,6 +820,8 @@ ifeq ($(PLATFORM),js)
+   LIBSYSNODE=$(SYSDIR)/sys_node.js
+   #LIBVMCOMPILED=$(CMDIR)/vm_js.js     --js-library $(LIBVMCOMPILED) \
+ 
++  # 0005: GL_TRACK_ERRORS=0 drops emscripten's JS-side GL error bookkeeping on every
++  # GL call (release build, r_ignoreGLErrors is 1 anyway). Rendering is unchanged.
+   CLIENT_LDFLAGS += --js-library $(LIBSYSCOMMON) \
+     --js-library $(LIBSYSBROWSER) \
+     -s WASM=1 \
+@@ -827,6 +836,7 @@ ifeq ($(PLATFORM),js)
+     -s WEBSOCKET_SUBPROTOCOL=binary \
+     -s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=0 \
+     -s ASSERTIONS=0 \
++    -s GL_TRACK_ERRORS=0 \
+     -s GL_ENABLE_GET_PROC_ADDRESS \
+     -s RESERVED_FUNCTION_POINTERS=1 \
+     -s STACK_SIZE=67108864 \
+diff --git a/src/renderergl1/tr_init.cpp b/src/renderergl1/tr_init.cpp
+index 9c8115b..d8b694a 100644
+--- a/src/renderergl1/tr_init.cpp
++++ b/src/renderergl1/tr_init.cpp
+@@ -227,11 +227,13 @@ void GL_CheckErrors( void ) {
+ 	int		err;
+ 	char	s[64];
+ 
+-	err = qglGetError();
+-	if ( err == GL_NO_ERROR ) {
++	// 0005: test the cvar first - in WebGL glGetError() is a synchronous round trip
++	// to the GPU process
++	if ( r_ignoreGLErrors->integer ) {
+ 		return;
+ 	}
+-	if ( r_ignoreGLErrors->integer ) {
++	err = qglGetError();
++	if ( err == GL_NO_ERROR ) {
+ 		return;
+ 	}
+ 	switch( err ) {
+diff --git a/src/renderergl2/tr_init.cpp b/src/renderergl2/tr_init.cpp
+index b7e0c5b..15d9909 100644
+--- a/src/renderergl2/tr_init.cpp
++++ b/src/renderergl2/tr_init.cpp
+@@ -294,11 +294,13 @@ void GL_CheckErrs( const char *file, int line ) {
+ 	int		err;
+ 	char	s[64];
+ 
+-	err = qglGetError();
+-	if ( err == GL_NO_ERROR ) {
++	// 0005: test the cvar first - in WebGL glGetError() is a synchronous round trip
++	// to the GPU process, and this runs per R_BindNullVao (many times per frame)
++	if ( r_ignoreGLErrors->integer ) {
+ 		return;
+ 	}
+-	if ( r_ignoreGLErrors->integer ) {
++	err = qglGetError();
++	if ( err == GL_NO_ERROR ) {
+ 		return;
+ 	}
+ 	switch( err ) {
