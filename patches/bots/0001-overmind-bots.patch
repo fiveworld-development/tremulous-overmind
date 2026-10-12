@@ -1,5 +1,5 @@
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
-index f68a52a..c36de85 100644
+index f68a52a..9a611de 100644
 --- a/src/game/g_bot.c
 +++ b/src/game/g_bot.c
 @@ -80,23 +80,19 @@ qboolean G_BotAdd( char *name, team_t team ) {
@@ -208,6 +208,30 @@ index f68a52a..c36de85 100644
  /**
   * Delete a random bot from a team (the worst score)
   * @param team
+@@ -259,10 +283,11 @@ void G_BotDelRandom ( team_t team ) {
+ 	int worst = -1;
+ 	int worstScore = 9999;
+ 	
+-	int reservedSlots = trap_Cvar_VariableIntegerValue( "sv_privateclients" );
+-	for( i = level.maxclients - 1; i > level.maxclients - reservedSlots - 1; i-- ) {
++	// bots live in the private slots at the bottom (see G_BotAdd), so search every
++	// slot rather than the top range the original code assumed
++	for( i = 0; i < level.maxclients; i++ ) {
+ 		ent = &g_entities[ i ];
+-		if(ent->r.svFlags & SVF_BOT && ent->client->pers.teamSelection == team) {
++		if( ent->inuse && ent->client && ( ent->r.svFlags & SVF_BOT ) && ent->client->pers.teamSelection == team ) {
+ 			score = ent->client->ps.persistant[ PERS_SCORE ];
+ 			if(score < worstScore) {
+ 				worst = i;
+@@ -270,7 +295,7 @@ void G_BotDelRandom ( team_t team ) {
+ 			}
+ 		}
+ 	}
+-	if(worst > 0) {
++	if(worst >= 0) {
+ 		G_BotDel(worst);
+ 	}
+ }
 diff --git a/src/game/g_bot.h b/src/game/g_bot.h
 index 2e09378..3d420d1 100644
 --- a/src/game/g_bot.h
