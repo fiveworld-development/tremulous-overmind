@@ -18,7 +18,7 @@ ExecStart=/opt/tremulous/server/tremded \
     +set net_port 307%i0 \
     +set fs_basepath /opt/tremulous/server \
     +set fs_homepath /opt/tremulous/servers/%i \
-    +set com_hunkmegs 128 \
+    +set com_hunkmegs 192 \
     +exec server.cfg
 Restart=always
 RestartSec=3
@@ -30,8 +30,9 @@ Nice=-5
 CPUWeight=400
 CPUQuota=70%
 IOWeight=40
-MemoryHigh=220M
-MemoryMax=300M
+# 192 MB hunk: nexus6 with 40 slots failed Hunk_Alloc at 128 (pages are only resident once used)
+MemoryHigh=320M
+MemoryMax=420M
 TasksMax=32
 
 # sandbox
