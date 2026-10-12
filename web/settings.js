@@ -418,7 +418,10 @@
     reset.addEventListener('click', resetAll);
     var done = el('button', 'om-set-btn', 'Done'); done.type = 'button'; done.id = 'om-set-done';
     done.addEventListener('click', close);
-    foot.appendChild(statusEl); foot.appendChild(reset); foot.appendChild(done);
+    // graphics, sound and the rest stay in the game's own options menu
+    var more = el('button', 'om-set-btn ghost', 'Graphics & sound'); more.type = 'button'; more.id = 'om-set-more';
+    more.addEventListener('click', function () { var s = send; close(); s('menu ingame_options'); });
+    foot.appendChild(statusEl); foot.appendChild(more); foot.appendChild(reset); foot.appendChild(done);
 
     box.appendChild(head); box.appendChild(body); box.appendChild(foot);
     root.appendChild(box);

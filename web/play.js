@@ -49,11 +49,7 @@
     game.hidden = false;
     game.classList.toggle('touch-on', isTouch);
     document.body.style.overflow = 'hidden';
-    if (isTouch && game.requestFullscreen) {
-      game.requestFullscreen({ navigationUI: 'hide' }).then(function () {
-        if (screen.orientation && screen.orientation.lock) return screen.orientation.lock('landscape');
-      }).catch(function () { /* iPhone: no element fullscreen, the rotate hint covers portrait */ });
-    }
+    enterFullscreen();
     progress(8, 'Loading engine…');
 
     var size = renderSize();
@@ -94,12 +90,11 @@
     // warnings ("team full", "can't build here") as a text line, not a modal box
     // in the middle of the screen that has to be clicked away
     args.push('+set', 'cg_disableWarningDialogs', '1');
-    // desktop: the player's own key bindings and mouse settings (touch.js needs the stock keys)
+    // desktop: the player's own key bindings and mouse settings (touch.js needs the stock keys).
+    // Sent as console commands after start, not on the command line: the engine keeps only
+    // 32 "+" commands from it, and ~30 binds pushed "+connect" out (no auto-join on PC).
     var settings = !isTouch && window.OvermindSettings;
-    if (settings) {
-      settings.installPointerLockPatch();
-      args = args.concat(settings.args());
-    }
+    if (settings) settings.installPointerLockPatch();
     if (server) args.push('+connect', 'overmind-' + server);
 
     // SDL's "desktop mode" in the browser is screen.width/height, so a windowed browser
@@ -126,12 +121,14 @@
           if (/[?&]debug=1\b/.test(location.search)) window.__overmind = M;
           progress(85, 'Downloading game data…');
           M.callMain(args);
+          if (settings && M._Overmind_Command) settingsCommands(settings.args()).forEach(function (c) { engineCommand(M, c); });
           // keep the brand splash up for a moment, then hand over to the engine loader
           var wait = Math.max(0, 1400 - (performance.now() - t0));
           setTimeout(function () { progress(100); splash.classList.add('done'); }, wait);
           if (isTouch) attachTouch(M, 0);
           if (settings) attachSettings(M);
           watchNav(M);
+          watchTutorial(M);
         }
       });
     }).catch(function (e) {
@@ -155,6 +152,17 @@
     M._Overmind_Command(p);
     M._free(p);
   }
+  // ['+bind','w','"+forward"','+set','sensitivity','5'] -> ['bind w "+forward"', 'set sensitivity 5']
+  // (bound commands are quoted, so only command names start with "+")
+  function settingsCommands(list) {
+    var out = [];
+    list.forEach(function (t) {
+      if (t.charAt(0) === '+') out.push(t.slice(1));
+      else if (out.length) out[out.length - 1] += ' ' + t;
+    });
+    return out;
+  }
+
   // desktop controls panel: the ⚙ button or F10; bindings apply live and are saved
   function attachSettings(M) {
     if (!M._Overmind_Command) return;
@@ -172,6 +180,31 @@
     }, true);
   }
 
+  // in-game menu "Options" (branding pk3, ui/ingame.menu): the page's own settings
+  function openOptions(M) {
+    if (touchUi && touchUi.openSheet) touchUi.openSheet();
+    else if (window.OvermindSettings && !OvermindSettings.isOpen())
+      OvermindSettings.open(function (cmd) { engineCommand(M, cmd); });
+  }
+
+  // PC: the tutorial key hints are useful right after spawning or evolving and noise
+  // after that - show them for a few seconds whenever team or class changes
+  var TUTORIAL_MS = 12000;
+  function watchTutorial(M) {
+    if (isTouch || !M._Cvar_VariableString || !M.UTF8ToString) return;
+    var stateName = engineString(M, 'overmind_state'), last = null, hideAt = 0, shown = true;
+    setInterval(function () {
+      var s = M.UTF8ToString(M._Cvar_VariableString(stateName)).split(' ');
+      var key = s[0] + ' ' + s[1];
+      if (key !== last) {
+        last = key; hideAt = Date.now() + TUTORIAL_MS;
+        if (!shown) { engineCommand(M, 'set cg_tutorial 1'); shown = true; }
+      } else if (shown && Date.now() > hideAt) {
+        engineCommand(M, 'set cg_tutorial 0'); shown = false;
+      }
+    }, 500);
+  }
+
   var navName = 0;
   function watchNav(M) {
     if (!M._Cvar_VariableString || !M._Overmind_Command || !M.UTF8ToString) return;
@@ -181,6 +214,7 @@
       if (!v) return;
       engineCommand(M, 'set overmind_nav ""');
       if (v === 'home') { leave(); return; }
+      if (v === 'options') { openOptions(M); return; }
       var server = v === '2' ? 2 : 1;
       M.websocket.url = wsUrl(server);
       engineCommand(M, 'connect overmind-' + server);
@@ -188,9 +222,10 @@
   }
 
   // touch layer needs the canvas and an engine with the Overmind_* API
+  var touchUi = null;
   function attachTouch(M, tries) {
     if (frame.querySelector('canvas') && M._Overmind_Action && window.OvermindTouch) {
-      window.OvermindTouch.attach(frame, M);
+      touchUi = window.OvermindTouch.attach(frame, M);
     } else if (tries < 100) {
       setTimeout(function () { attachTouch(M, tries + 1); }, 200);
     }
@@ -259,6 +294,30 @@
     var c = frame.querySelector('canvas');
     if (c && document.activeElement !== c) c.focus();
   });
+
+  // Fullscreen: entered on "Play" (needs that click), toggled with the ⛶ button.
+  // On PC, Keyboard Lock keeps Esc for the game menu while fullscreen (Chrome/Edge);
+  // the browser then leaves fullscreen on a long Esc press instead.
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement; }
+  function enterFullscreen() {
+    var req = game.requestFullscreen || game.webkitRequestFullscreen;
+    if (!req) return;   // iPhone: no element fullscreen, the rotate hint covers portrait
+    var p;
+    try { p = req.call(game, { navigationUI: 'hide' }); } catch (e) { return; }
+    Promise.resolve(p).then(function () {
+      if (isTouch && screen.orientation && screen.orientation.lock) return screen.orientation.lock('landscape');
+      if (!isTouch && navigator.keyboard && navigator.keyboard.lock) return navigator.keyboard.lock(['Escape']);
+    }).catch(function () { /* refused or unsupported: windowed is fine */ });
+  }
+  function toggleFullscreen() {
+    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else enterFullscreen();
+  }
+  var fsBtn = document.getElementById('fullscreen');
+  if (fsBtn && (game.requestFullscreen || game.webkitRequestFullscreen)) {
+    fsBtn.hidden = false;
+    fsBtn.addEventListener('click', toggleFullscreen);
+  }
 
   function leave() {
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});

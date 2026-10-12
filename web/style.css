@@ -210,6 +210,10 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
 }
 .exit:hover { opacity: 1; color: var(--ink); }
 .controls { right: calc(max(0.5rem, env(safe-area-inset-right)) + 2.5rem); font-size: 1rem; }
+.fs { right: calc(max(0.5rem, env(safe-area-inset-right)) + 5rem); font-size: 1rem; }
+.controls[hidden] + .fs { right: calc(max(0.5rem, env(safe-area-inset-right)) + 2.5rem); }
+/* touch draws its own top bar: the page's corner buttons stay out of its way */
+#game.touch-on .fs { display: none; }
 
 /* ---------- touch controls (touch.js) ----------
    Same language as the game menus: black glass, thin frames, folded corners,

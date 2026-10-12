@@ -43,11 +43,15 @@
   var AIM_STEPS = [0.5, 0.6, 0.8, 1, 1.25, 1.5, 2, 2.5];
   var SIZES = { s: 0.85, m: 1, l: 1.18 };
 
-  // look response: slow drags are damped for precision, fast flicks accelerate
+  // look response: linear for normal drags (damping slow drags felt sticky), fast
+  // flicks accelerate; vertical a bit calmer than horizontal
   var LOOK_GAIN = 2.6;         // mouse counts per CSS pixel at aim 1.0, accel 1.0
-  var ACCEL_MIN = 0.7;         // multiplier at rest (precise aim)
-  var ACCEL_K = 0.6;           // extra multiplier per px/ms of finger speed
-  var ACCEL_MAX = 2.2;         // cap for flicks
+  var ACCEL_FROM = 0.6;        // finger speed (px/ms) where acceleration starts
+  var ACCEL_K = 0.5;           // extra multiplier per px/ms above that
+  var ACCEL_MAX = 2.0;         // cap for flicks
+  var LOOK_Y = 0.8;            // vertical / horizontal
+  var AIM_FRICTION = 0.6;      // look speed while the crosshair is on an enemy in reach
+  var LOOK_SMOOTH = 0.65;      // share of the pending look movement applied per frame
   // gyro: rotation rate (deg/s) -> mouse counts
   var GYRO_GAIN = 6;           // counts per degree at aim 1.0 (about 1:1 at sensitivity 7)
   var GYRO_DZ = 1.5;           // deg/s deadzone against sensor drift and hand tremor
@@ -338,14 +342,14 @@
       voteBar.setAttribute('data-kind', kind);
     }
     // ---------- auto fire: polled fast; the cgame only writes overmind_aim when it changes
-    var autoOn = false;
+    var autoOn = false, onTarget = false;
     function fireHeld() {
       for (var id in touches) { var o = touches[id]; if (o.kind === 'hold' && o.a === A.FIRE) return true; }
       return false;
     }
     function autoFire() {
-      var want = !!settings.autofire && mode === 'game' && !root.hasAttribute('data-picking') && chat.hidden &&
-                 cvar('overmind_aim') === '1';
+      onTarget = mode === 'game' && !root.hasAttribute('data-picking') && cvar('overmind_aim') === '1';
+      var want = !!settings.autofire && onTarget && chat.hidden;
       if (want === autoOn) return;
       autoOn = want;
       pad.fire.classList.toggle('auto', want);
@@ -405,14 +409,32 @@
       lookRemX = x - ix; lookRemY = y - iy;   // keep sub-count remainder for slow aim
       if (ix || iy) M._Overmind_Look(ix, iy);
     }
+    // Touch events and frames tick at different rates (60/120 Hz panels, coalesced
+    // events): applying each event at once moves the camera in uneven steps. Finger
+    // movement is collected and handed to the engine per animation frame instead,
+    // mostly in the same frame and the rest in the next one or two.
+    var pendX = 0, pendY = 0, lookRaf = 0;
+    function lookFrame() {
+      lookRaf = 0;
+      var x = pendX * LOOK_SMOOTH, y = pendY * LOOK_SMOOTH;
+      if (Math.abs(pendX) < 1.5 && Math.abs(pendY) < 1.5) { x = pendX; y = pendY; }
+      pendX -= x; pendY -= y;
+      emit(x, y);
+      if (pendX || pendY) lookRaf = requestAnimationFrame(lookFrame);
+    }
+    function look(fx, fy) {
+      pendX += fx; pendY += fy;
+      if (!lookRaf) lookRaf = requestAnimationFrame(lookFrame);
+    }
     function lookTouch(o, t) {
       var tn = now(), dt = Math.max(4, Math.min(64, tn - o.t));
       var dx = t.clientX - o.x, dy = t.clientY - o.y;
       o.x = t.clientX; o.y = t.clientY; o.t = tn;
       var v = Math.hypot(dx, dy) / dt;                 // px per ms
       o.v = o.v ? o.v * 0.6 + v * 0.4 : v;             // smoothed finger speed
-      var g = LOOK_GAIN * settings.look * Math.min(ACCEL_MAX, ACCEL_MIN + ACCEL_K * o.v);
-      emit(dx * g, dy * g);
+      var accel = Math.min(ACCEL_MAX, 1 + ACCEL_K * Math.max(0, o.v - ACCEL_FROM));
+      var g = LOOK_GAIN * settings.look * accel * (onTarget ? AIM_FRICTION : 1);
+      look(dx * g, dy * g * LOOK_Y);
     }
 
     var gyro = { listening: false, granted: false, wantPerm: false, t: 0, x: 0, y: 0 };
@@ -562,24 +584,27 @@
           touches[id] = { kind: 'ui', el: el };
           continue;
         }
-        if (el.hasAttribute('data-toggle')) {
-          var ta = +el.getAttribute('data-toggle');
-          act(ta, !pressed[ta]);
-          el.classList.toggle('on', !!pressed[ta]);
+        // every button in the right thumb cluster keeps aiming when the thumb slides on
+        var inPad = !!el.closest('.t-pad');
+        if (el.hasAttribute('data-toggle') || el.hasAttribute('data-cmd') || el.hasAttribute('data-tap')) {
+          if (el.hasAttribute('data-toggle')) {
+            var ta = +el.getAttribute('data-toggle');
+            act(ta, !pressed[ta]);
+            el.classList.toggle('on', !!pressed[ta]);
+          } else {
+            if (el.hasAttribute('data-cmd')) runCmd(el.getAttribute('data-cmd'));
+            else tap(+el.getAttribute('data-tap'));
+            el.classList.add('down'); setTimeout(function (b) { b.classList.remove('down'); }.bind(null, el), 120);
+          }
           buzz(8);
+          if (inPad) touches[id] = { kind: 'look', x: t.clientX, y: t.clientY, t: now(), v: 0 };
           continue;
         }
-        if (el.hasAttribute('data-cmd')) {
-          runCmd(el.getAttribute('data-cmd')); buzz(8);
-          el.classList.add('down'); setTimeout(function (b) { b.classList.remove('down'); }.bind(null, el), 120);
-          continue;
-        }
-        if (el.hasAttribute('data-tap')) { tap(+el.getAttribute('data-tap')); el.classList.add('down'); setTimeout(function (b) { b.classList.remove('down'); }.bind(null, el), 120); continue; }
         if (el.hasAttribute('data-hold')) {
           var a = +el.getAttribute('data-hold');
           act(a, 1); el.classList.add('down');
           if (a === A.FIRE || a === A.JUMP) buzz(10);
-          touches[id] = { kind: 'hold', a: a, el: el, look: el.hasAttribute('data-look'), x: t.clientX, y: t.clientY, t: now(), v: 0 };
+          touches[id] = { kind: 'hold', a: a, el: el, look: inPad || el.hasAttribute('data-look'), x: t.clientX, y: t.clientY, t: now(), v: 0 };
           continue;
         }
         var zone = el.getAttribute('data-zone');
@@ -675,7 +700,7 @@
     var aimTimer = setInterval(autoFire, 40);
     poll();
 
-    return { detach: function () {
+    return { openSheet: function () { sheet.hidden = false; refreshUi(); }, detach: function () {
       clearInterval(pollTimer);
       clearInterval(aimTimer);
       Object.keys(touches).forEach(function (id) { finish(id, null); });
