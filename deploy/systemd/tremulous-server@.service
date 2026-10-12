@@ -1,0 +1,63 @@
+# Tremulous dedicated server instance %i (1 = Overmind Arena, 2 = Reactor Skirmish)
+# UDP only on 127.0.0.1 – players reach it exclusively through the websocket gateway.
+[Unit]
+Description=Tremulous dedicated server %i
+After=network.target
+
+[Service]
+Type=simple
+User=trem
+Group=trem
+WorkingDirectory=/opt/tremulous/server
+ExecStart=/opt/tremulous/server/tremded \
+    +set dedicated 1 \
+    +set net_ip 127.0.0.1 +set net_ip6 ::1 +set net_enabled 1 \
+    +set net_port 3072%i \
+    +set fs_basepath /opt/tremulous/server \
+    +set fs_homepath /opt/tremulous/servers/%i \
+    +set com_hunkmegs 128 \
+    +exec server.cfg
+Restart=always
+RestartSec=3
+
+# resources: signalcanna.com on this host always wins
+Nice=10
+CPUWeight=40
+CPUQuota=70%
+IOWeight=40
+MemoryHigh=220M
+MemoryMax=300M
+TasksMax=32
+
+# sandbox
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/tremulous/servers/%i
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @debug @cpu-emulation @obsolete @reboot @swap @raw-io
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

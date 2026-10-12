@@ -1,0 +1,20 @@
+[Unit]
+Description=Write Tremulous server status for the landing page
+
+[Service]
+Type=oneshot
+User=trem
+Group=trem
+ExecStart=/usr/bin/python3 /opt/tremulous/bin/tremulous-status.py /opt/tremulous/web/status.json
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/tremulous/web
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service

@@ -1,0 +1,71 @@
+diff --git a/src/sdl/sdl_input.cpp b/src/sdl/sdl_input.cpp
+index 3c9e2e6..612d6c2 100644
+--- a/src/sdl/sdl_input.cpp
++++ b/src/sdl/sdl_input.cpp
+@@ -42,6 +42,13 @@ static SDL_Joystick *stick = NULL;
+ 
+ static bool mouseAvailable = false;
+ static bool mouseActive = false;
++static bool legacyCursorResync = true;
++
++#ifdef __EMSCRIPTEN__
++#define IN_BROWSER 1
++#else
++#define IN_BROWSER 0
++#endif
+ 
+ static cvar_t *in_mouse             = NULL;
+ static cvar_t *in_nograb;
+@@ -1238,9 +1245,10 @@ void IN_Frame( void )
+ 		// Loading in windowed mode
+ 		IN_DeactivateMouse( );
+ 	}
+-	else if( !cls.glconfig.isFullscreen && cursorShowing && cls.uiInterface != 2 )
++	else if( cursorShowing && ( !cls.glconfig.isFullscreen || IN_BROWSER ) )
+ 	{
+-		// Use WM cursor when not fullscreen
++		// Use WM cursor in menus. In the browser this also covers "fullscreen",
++		// since relative motion without pointer lock lets the cursors drift apart.
+ 		IN_DeactivateMouse( );
+ 	}
+ 	else if( !( SDL_GetWindowFlags( SDL_window ) & SDL_WINDOW_INPUT_FOCUS ) )
+@@ -1253,10 +1261,38 @@ void IN_Frame( void )
+ 		IN_ActivateMouse( );
+ 	}
+ 	if( !mouseActive && cls.uiInterface != 2 )
+-	{	
++	{
+ 		SDL_GetMouseState( &x, &y );
+ 		IN_SetUIMousePosition( x, y );
+ 	}
++	else if( !mouseActive && cursorShowing )
++	{
++		// Legacy (1.1/GPP) UIs have no "set cursor position" call and only take
++		// relative motion. Pin their cursor to the window cursor by clamping it to
++		// the top-left corner once, then feeding exact deltas in 640x480 UI space.
++		static int uiX = -1, uiY = -1;
++		int w = cls.glconfig.vidWidth, h = cls.glconfig.vidHeight;
++		SDL_GetMouseState( &x, &y );
++		if( w > 0 && h > 0 )
++		{
++			int tx = x * 640 / w;
++			int ty = y * 480 / h;
++			if( uiX < 0 || legacyCursorResync )
++			{
++				Com_QueueEvent( in_eventTime, SE_MOUSE, -100000, -100000, 0, NULL );
++				uiX = uiY = 0;
++				legacyCursorResync = false;
++			}
++			if( tx != uiX || ty != uiY )
++			{
++				Com_QueueEvent( in_eventTime, SE_MOUSE, tx - uiX, ty - uiY, 0, NULL );
++				uiX = tx;
++				uiY = ty;
++			}
++		}
++	}
++	if( mouseActive )
++		legacyCursorResync = true; // relative motion moved the legacy cursor, re-pin next time
+ 
+ 	IN_ProcessEvents( );
+ 

@@ -1,0 +1,15 @@
+# upstream checkouts, toolchains and build output are fetched/generated
+/src/
+/tools/
+/build/
+/data/
+/local/
+/branding/extracted/
+*.log
+node_modules/
+.claude/settings.local.json
+
+# local host access (IP, key path) never goes public
+/deploy/host.local.psd1
+/.claude/
+

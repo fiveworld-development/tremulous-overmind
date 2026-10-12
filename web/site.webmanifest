@@ -1,0 +1,12 @@
+{
+  "name": "Tremulous Overmind",
+  "short_name": "Tremulous",
+  "description": "Play Tremulous free in your browser. Presented by WebNova360.com",
+  "start_url": "%BASE%",
+  "scope": "%BASE%",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05080d",
+  "theme_color": "#05080d",
+  "icons": [{ "src": "%BASE%favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: %BASE%assets/
+Disallow: %BASE%ws/

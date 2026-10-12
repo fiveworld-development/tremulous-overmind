@@ -1,0 +1,170 @@
+/* Tremulous Overmind – the look borrows from the game's own menus:
+   black, thin grey frames with folded corners, right-aligned menu,
+   green terminal title. WebNova360 blue only for the "presented by" mark. */
+:root {
+  --black: #000;
+  --ink: #e9e9e4;
+  --dim: #8f8f88;
+  --faint: #55554f;
+  --line: rgba(233, 233, 228, 0.22);
+  --line-strong: rgba(233, 233, 228, 0.45);
+  --green: #3fb34f;          /* title / terminal */
+  --alien: #d9541e;
+  --human: #4f8fd6;
+  --wn: #2598ff;             /* WebNova360 */
+  --menu: "Bahnschrift", "DIN Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --text: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  --fold: 10px;
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; background: var(--black); }
+body { margin: 0; color: var(--ink); font: 400 1rem/1.6 var(--text); background: var(--black); overflow-x: hidden; }
+::selection { background: var(--green); color: #000; }
+a { color: var(--ink); text-decoration-color: var(--faint); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--ink); }
+:focus-visible { outline: 1px solid var(--green); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- first screen = the in-game main menu ---------- */
+.menu-screen {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  grid-template: "presented menu" auto "title title" 1fr "credits credits" auto / 1fr auto;
+  padding: clamp(1rem, 3vw, 1.75rem) var(--gutter) 1.25rem;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.15) 40%, rgba(0,0,0,.85) 100%),
+    url("img/hero.jpg") center / cover no-repeat,
+    var(--black);
+}
+
+.presented { grid-area: presented; align-self: start; text-decoration: none; line-height: 1.1; }
+.presented small { display: block; font: 500 0.66rem/1 var(--mono); letter-spacing: 0.28em; text-transform: uppercase; color: var(--dim); margin-bottom: 0.35rem; }
+.presented span { font: 600 clamp(1.05rem, 2.4vw, 1.4rem)/1 var(--menu); letter-spacing: 0.02em; color: var(--ink); }
+.presented b { color: var(--wn); font-weight: 600; }
+
+.mainmenu { grid-area: menu; display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; }
+.mainmenu a, .mainmenu button {
+  font: 400 clamp(1.15rem, 2.6vw, 1.55rem)/1.25 var(--menu);
+  color: var(--ink); text-decoration: none; background: none; border: 0; padding: 0.1rem 0; cursor: pointer;
+  letter-spacing: 0.04em; text-shadow: 0 1px 2px #000;
+}
+.mainmenu a:hover, .mainmenu button:hover { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.55); }
+.mainmenu button { color: #fff; }
+
+.title { grid-area: title; align-self: center; justify-self: center; text-align: center; padding-block: 2rem; }
+.title h1 { margin: 0; line-height: 0; }
+.title img {
+  width: min(720px, 88vw); height: auto;
+  /* lift the dim scanline letters; "screen" drops the jpg's dark backdrop */
+  mix-blend-mode: screen; filter: brightness(3.2) contrast(1.5) saturate(1.2);
+}
+.sub { margin: 1.1rem 0 0; font: 400 clamp(0.95rem, 2vw, 1.1rem)/1.5 var(--text); color: #c9c9c2; text-shadow: 0 1px 3px #000; }
+
+.credits { grid-area: credits; margin: 0; text-align: center; font: 400 0.72rem/1.6 var(--menu); color: rgba(233,233,228,.6); letter-spacing: 0.03em; }
+
+/* ---------- framed blocks (in-game window style) ---------- */
+main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
+.block { position: relative; margin-block: clamp(2.5rem, 7vw, 4.5rem); }
+.frame-title {
+  margin: 0 0 0.9rem; font: 400 1.5rem/1 var(--menu); letter-spacing: 0.05em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 1rem;
+}
+.frame-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* server browser */
+.browser {
+  border: 1px solid var(--line-strong);
+  clip-path: polygon(0 0, calc(100% - var(--fold)) 0, 100% var(--fold), 100% 100%, var(--fold) 100%, 0 calc(100% - var(--fold)));
+  background: rgba(255,255,255,.015);
+}
+.row { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.6fr) 7rem 6rem; align-items: center; gap: 1rem; padding: 0.7rem 1rem; }
+.row + .row { border-top: 1px solid var(--line); }
+.row.head { font: 400 0.75rem/1 var(--menu); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); padding-block: 0.6rem; background: rgba(255,255,255,.04); }
+.row:not(.head):hover { background: rgba(255,255,255,.035); }
+.name b { display: block; font: 600 1.15rem/1.2 var(--menu); letter-spacing: 0.02em; }
+.name small { color: var(--dim); font-size: 0.85rem; }
+.map { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.map img { width: 96px; height: 72px; object-fit: cover; border: 1px solid var(--line); flex: none; background: #111; }
+.map i { font: normal 400 0.95rem/1 var(--mono); color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.players { font: 400 0.95rem/1.2 var(--mono); color: var(--dim); }
+.players.on { color: var(--ink); }
+.join {
+  font: 500 1rem/1 var(--menu); letter-spacing: 0.08em; text-transform: uppercase; color: #000; background: var(--ink);
+  border: 0; padding: 0.7rem 1.1rem; cursor: pointer; width: 100%;
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px));
+  transition: background-color .15s;
+}
+.join:hover { background: #fff; }
+.join:active { transform: translateY(1px); }
+.note { margin: 0.9rem 0 0; color: var(--dim); font-size: 0.92rem; max-width: 42rem; }
+
+/* teams */
+.teams { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2.5rem; }
+.teams .frame-title, .teams .keys { grid-column: 1 / -1; }
+.team { padding-left: 1rem; border-left: 2px solid var(--alien); }
+.team.human { border-left-color: var(--human); }
+.team h3 { margin: 0 0 0.4rem; font: 600 1.3rem/1 var(--menu); letter-spacing: 0.06em; text-transform: uppercase; }
+.team.alien h3 { color: var(--alien); }
+.team.human h3 { color: var(--human); }
+.team p { margin: 0; color: #c4c4bd; }
+.keys { margin: 2rem 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.4rem 2rem; }
+.keys div { display: flex; gap: 0.9rem; align-items: baseline; border-bottom: 1px dotted var(--line); padding-block: 0.35rem; }
+.keys dt { font: 500 0.85rem/1 var(--mono); color: var(--green); min-width: 5.5rem; }
+.keys dd { margin: 0; color: var(--dim); font-size: 0.92rem; }
+
+/* faq */
+.faq { max-width: 44rem; }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary { cursor: pointer; padding: 0.85rem 0; font: 500 1.08rem/1.3 var(--menu); letter-spacing: 0.02em; list-style: none; display: flex; justify-content: space-between; gap: 1rem; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font-family: var(--mono); color: var(--dim); }
+.faq details[open] summary::after { content: "–"; }
+.faq p { margin: 0 0 1rem; color: #c4c4bd; }
+
+.foot { max-width: 64rem; margin: 0 auto; padding: 1.5rem var(--gutter) 2.5rem; border-top: 1px solid var(--line); font: 400 0.8rem/1.6 var(--menu); color: var(--dim); letter-spacing: 0.02em; }
+.foot p { margin: 0.2rem 0; }
+.foot a { color: var(--dim); }
+.noscript { position: fixed; inset: auto 1rem 1rem; padding: 1rem; background: #300; }
+
+@media (max-width: 44rem) {
+  .row { grid-template-columns: 1fr auto; grid-template-areas: "name join" "map players"; gap: 0.6rem 1rem; }
+  .row.head { display: none; }
+  .row > .name { grid-area: name; }
+  .row > .map { grid-area: map; }
+  .row > .players { grid-area: players; text-align: right; }
+  .row > span:last-child { grid-area: join; }
+  .map img { width: 72px; height: 54px; }
+  .teams { grid-template-columns: 1fr; gap: 1.5rem; }
+}
+
+/* ---------- in-game layer ---------- */
+.game { position: fixed; inset: 0; z-index: 50; background: #000; touch-action: none; }
+.game[hidden] { display: none; }
+#viewport-frame { position: absolute; inset: 0; overflow: hidden; }
+#viewport-frame canvas { display: block; width: 100%; height: 100%; }
+#viewport-frame:focus { outline: none; }
+
+.splash { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: #000; transition: opacity .5s ease, visibility .5s; }
+.splash.done { opacity: 0; visibility: hidden; }
+.splash-inner { width: min(30rem, 88vw); text-align: center; }
+.splash-inner img { width: 100%; height: auto; mix-blend-mode: screen; filter: brightness(3.2) contrast(1.5) saturate(1.2); }
+.presented-by { margin: 1.5rem 0 1.75rem; font: 400 0.8rem/1 var(--mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+.presented-by b { color: var(--wn); font-weight: 500; }
+.bar { height: 2px; background: #1a1a18; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 4%; background: var(--green); transition: width .3s ease; }
+.msg { margin: 0.8rem 0 0; font: 400 0.78rem/1.4 var(--mono); color: var(--faint); min-height: 1.2em; }
+
+.exit {
+  position: absolute; top: max(0.5rem, env(safe-area-inset-top)); right: max(0.5rem, env(safe-area-inset-right)); z-index: 4;
+  width: 2rem; height: 2rem; border: 1px solid var(--line); background: rgba(0,0,0,.5); color: var(--dim);
+  font: 400 1.1rem/1 var(--mono); cursor: pointer; opacity: .5;
+}
+.exit:hover { opacity: 1; color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

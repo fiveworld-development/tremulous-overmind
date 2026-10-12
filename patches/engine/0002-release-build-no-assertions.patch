@@ -1,0 +1,13 @@
+diff --git a/Makefile b/Makefile
+index 9b1ba8d..6a367ff 100644
+--- a/Makefile
++++ b/Makefile
+@@ -824,7 +824,7 @@ ifeq ($(PLATFORM),js)
+     -s WEBSOCKET_URL=wss:// \
+     -s WEBSOCKET_SUBPROTOCOL=binary \
+     -s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=0 \
+-    -s ASSERTIONS=1 \
++    -s ASSERTIONS=0 \
+     -s GL_ENABLE_GET_PROC_ADDRESS \
+     -s RESERVED_FUNCTION_POINTERS=1 \
+     -s STACK_SIZE=268435456 \
