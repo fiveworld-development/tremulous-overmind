@@ -34,6 +34,8 @@ D="$B/build/dist/server"
 as_trem rm -rf "$D"; as_trem mkdir -p "$D/vm" "$D/bot"
 as_trem find "$W/engine/build" -maxdepth 2 -type f -name 'tremded*' -exec cp {} "$D/" \;
 as_trem find "$W/bots/build" -path '*/base/vm/game.qvm' -exec cp {} "$D/vm/" \;
+# the bot game module needs its matching client module (entity layout differs from 1.3)
+as_trem find "$W/bots/build" -path '*/base/vm/cgame.qvm' -exec cp {} "$D/vm/" \;
 as_trem cp -r "$W/bots/gpp-bot/." "$D/bot/"
 as_trem find "$D/bot" -name '._*' -delete
 sudo -n ls -la "$D" "$D/vm"

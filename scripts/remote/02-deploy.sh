@@ -54,10 +54,10 @@ for i in 1 2; do
     as_trem mkdir -p "$G/vm"
     as_trem install -m 0640 "$O/deploy/server/$cfg.cfg" "$G/server.cfg"
     as_trem install -m 0640 "$O/deploy/server/$cfg-maprotation.cfg" "$G/maprotation.cfg"
-    # The trem-gpp-bots QVM speaks the older GPP entity layout; 1.3 clients drop with
-    # "Bad corpseNum". Until the bot AI is ported to 1.3, run the stock 1.3 game module
-    # (vms-gpp-v1.3.0.pk3). BOT_QVM=1 re-enables the bot build for testing.
-    if [ "${BOT_QVM:-0}" = 1 ]; then
+    # Bots: the trem-gpp-bots game module uses an older entity layout than 1.3, so the
+    # clients get its matching cgame.qvm (zz-overmind-vm.pk3, below). BOT_QVM=0 falls
+    # back to the stock 1.3 game module without bots.
+    if [ "${BOT_QVM:-1}" = 1 ]; then
         as_trem install -m 0640 "$DL/server/vm/game.qvm" "$G/vm/game.qvm"
     else
         as_trem rm -f "$G/vm/game.qvm"
@@ -70,6 +70,22 @@ sudo -n test -x "$B/venv/bin/websockify" || {
     as_trem python3 -m venv "$B/venv"
     as_trem "$B/venv/bin/pip" install -q "git+https://github.com/justinl1996/websockify.git@$WEBSOCKIFY_COMMIT"
 }
+
+echo "== client module for the bot game (zz-overmind-vm.pk3)"
+as_trem mkdir -p "$B/build/pk3"
+if [ "${BOT_QVM:-1}" = 1 ]; then
+    # deterministic zip (fixed timestamp): the content-addressed URL only changes with the qvm
+    as_trem python3 - "$DL/server/vm/cgame.qvm" "$B/build/pk3/zz-overmind-vm.pk3" <<'PY'
+import sys, zipfile
+src, dst = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(dst, "w") as z:
+    info = zipfile.ZipInfo("vm/cgame.qvm", date_time=(2026, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    z.writestr(info, open(src, "rb").read())
+PY
+else
+    as_trem rm -f "$B/build/pk3/zz-overmind-vm.pk3" "$B/server/gpp/zz-overmind-vm.pk3"
+fi
 
 echo "== web ($SHA)"
 REL="$B/web/releases/$SHA"
