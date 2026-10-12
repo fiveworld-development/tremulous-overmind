@@ -94,9 +94,14 @@ function main() {
     }
     fs.writeFileSync(path.join(out, 'assets/manifest.json'), JSON.stringify(manifest));
 
-    // 2. engine: copy wasm, patch the built-in asset list so extra pk3s get loaded
-    fs.copyFileSync(path.join(clientBin, 'tremulous.wasm'), path.join(out, 'tremulous.wasm'));
+    // 2. engine: content-addressed wasm (a cached wasm from another build fails to link
+    // against a newer loader), patch the built-in asset list so extra pk3s get loaded
+    const wasm = fs.readFileSync(path.join(clientBin, 'tremulous.wasm'));
+    const wasmName = `tremulous.${crc32(wasm).toString(36)}.wasm`;
+    fs.writeFileSync(path.join(out, wasmName), wasm);
     let js = fs.readFileSync(path.join(clientBin, 'tremulous.js'), 'utf8');
+    if (!js.includes("'tremulous.wasm'")) throw new Error('wasm file name not found in tremulous.js');
+    js = js.replaceAll("'tremulous.wasm'", `'${wasmName}'`);
     const anchor = /(\{\s*src:"map-base-a51_b2\.pk3",\s*dest:"gpp\/map-base-a51_b2\.pk3",\s*checksum:\d+,\s*\})/;
     if (!anchor.test(js)) throw new Error('asset list anchor not found in tremulous.js');
     const extra = manifest
