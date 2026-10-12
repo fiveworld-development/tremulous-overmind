@@ -100,8 +100,8 @@ if [ ! -f /etc/ssl/tremulous/origin.crt ]; then
         -subj "/CN=$HOST_NAME" -keyout /etc/ssl/tremulous/origin.key -out /etc/ssl/tremulous/origin.crt 2>/dev/null
     sudo -n chmod 0640 /etc/ssl/tremulous/origin.key
 fi
-sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous-headers.conf" | sudo -n tee /etc/nginx/snippets/tremulous-headers.conf >/dev/null
-sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous.conf" | sudo -n tee /etc/nginx/sites-available/tremulous >/dev/null
+sudo -n sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous-headers.conf" | sudo -n tee /etc/nginx/snippets/tremulous-headers.conf >/dev/null
+sudo -n sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous.conf" | sudo -n tee /etc/nginx/sites-available/tremulous >/dev/null
 sudo -n ln -sfn /etc/nginx/sites-available/tremulous /etc/nginx/sites-enabled/tremulous
 sudo -n nginx -t
 sudo -n systemctl reload nginx
