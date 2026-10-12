@@ -85,6 +85,10 @@
     args.push('+set', 'cg_tutorial', isTouch ? '0' : '1');
     // touch: the page draws large team/spawn pickers instead of the engine's menus
     args.push('+set', 'overmind_touch', isTouch ? '1' : '0');
+    // audio runs on the page's main thread (ScriptProcessorNode): the default 512-sample
+    // buffer means ~90 callbacks a second competing with rendering; larger buffers cut
+    // that 2-4x for 20-45 ms more sound latency, which nobody hears in this game
+    args.push('+set', 's_sdlDevSamps', isTouch ? '2048' : '1024');
     // touch: the team list sits exactly where the left thumb steers
     if (isTouch) args.push('+set', 'cg_drawTeamOverlay', '0');
     // warnings ("team full", "can't build here") as a text line, not a modal box
