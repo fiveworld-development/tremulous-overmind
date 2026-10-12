@@ -58,7 +58,7 @@ echo "== web ($SHA)"
 REL="$B/web/releases/$SHA"
 as_trem mkdir -p "$B/build/pk3" "$B/web/releases"
 as_trem bash -c "cd '$O' && node scripts/build-web.js --stack '$B/src/web-stack' --client '$DL/client' \
-    --pk3 '$B/build/pk3' --out '$REL' --base /"
+    --pk3 '$B/build/pk3' --out '$REL' --base /play-tremulous/"
 # the servers need our paks too (pure servers only accept paks they have)
 as_trem cp "$B"/build/pk3/*.pk3 "$B/server/gpp/"
 as_trem ln -sfn "$REL" "$B/web/current"
@@ -90,7 +90,7 @@ if [ ! -f /etc/ssl/tremulous/origin.crt ]; then
         -subj "/CN=$HOST_NAME" -keyout /etc/ssl/tremulous/origin.key -out /etc/ssl/tremulous/origin.crt 2>/dev/null
     sudo -n chmod 0640 /etc/ssl/tremulous/origin.key
 fi
-sudo -n install -m 0644 "$O/deploy/nginx/tremulous-headers.conf" /etc/nginx/snippets/tremulous-headers.conf
+sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous-headers.conf" | sudo -n tee /etc/nginx/snippets/tremulous-headers.conf >/dev/null
 sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous.conf" | sudo -n tee /etc/nginx/sites-available/tremulous >/dev/null
 sudo -n ln -sfn /etc/nginx/sites-available/tremulous /etc/nginx/sites-enabled/tremulous
 sudo -n nginx -t
@@ -101,5 +101,5 @@ sleep 3
 systemctl --no-pager --lines=0 status "tremulous-server@1" "tremulous-server@2" "tremulous-gateway@1" "tremulous-gateway@2" | grep -E '●|Active:'
 sudo -n -u trem python3 "$B/bin/tremulous-status.py" /dev/stdout || true
 echo
-curl -sk -o /dev/null -w 'page %{http_code}\n' --resolve "$HOST_NAME:443:127.0.0.1" "https://$HOST_NAME/"
+curl -sk -o /dev/null -w 'page %{http_code}\n' --resolve "$HOST_NAME:443:127.0.0.1" "https://$HOST_NAME/play-tremulous/"
 echo "deployed $SHA"
