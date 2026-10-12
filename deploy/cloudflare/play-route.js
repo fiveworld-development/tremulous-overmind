@@ -19,6 +19,10 @@ export default {
     }
 
     const upstream = new Request(ORIGIN + url.pathname + url.search, request);
+    // Subrequests from a Worker reach the origin with the Worker's own address in
+    // CF-Connecting-IP, so every player would share one per-IP limit. Pass the real
+    // client on (always overwritten here, so a visitor cannot set it).
+    upstream.headers.set('X-Overmind-Client', request.headers.get('CF-Connecting-IP') || '');
     if (request.headers.get('Upgrade') === 'websocket') {
       return fetch(upstream);
     }

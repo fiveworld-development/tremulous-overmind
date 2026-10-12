@@ -64,6 +64,9 @@
       '+set', 'fs_basepath', 'tremulous_base',
       '+set', 'fs_homepath', 'tremulous_home',
       '+set', 'cl_allowDownload', '0',
+      // no SOCKS relay: each attempt opened an extra websocket that only failed,
+      // and they ate the per-IP connection limit (slow or refused server switches)
+      '+set', 'net_socksEnabled', '0',
       '+set', 'name', '"' + playerName() + '"',
       // network: 40-player snapshots need more than the 25 kB/s default, and 30 input
       // packets a second feel sluggish; frames uncapped for 120 Hz displays
@@ -108,12 +111,14 @@
         onRuntimeInitialized: function () {
           var M = this;
           engineModule = M;
+          if (/[?&]debug=1\b/.test(location.search)) window.__overmind = M;
           progress(85, 'Downloading game data…');
           M.callMain(args);
           // keep the brand splash up for a moment, then hand over to the engine loader
           var wait = Math.max(0, 1400 - (performance.now() - t0));
           setTimeout(function () { progress(100); splash.classList.add('done'); }, wait);
           if (isTouch) attachTouch(M, 0);
+          watchNav(M);
         }
       });
     }).catch(function (e) {
@@ -122,6 +127,35 @@
   }
 
   var engineModule = null;
+
+  // ---- in-game main menu -> page: the menu (branding pk3, ui/main.menu) sets
+  // overmind_nav to 1/2 (join that server) or "home" (back to the website).
+  // The engine opens one websocket per server address and reads the gateway URL
+  // from Module.websocket each time, so switching servers needs no reload.
+  function engineString(M, s) {
+    var n = s.length * 3 + 1, p = M._malloc(n);
+    M.stringToUTF8(s, p, n);
+    return p;
+  }
+  function engineCommand(M, text) {
+    var p = engineString(M, text);
+    M._Overmind_Command(p);
+    M._free(p);
+  }
+  var navName = 0;
+  function watchNav(M) {
+    if (!M._Cvar_VariableString || !M._Overmind_Command || !M.UTF8ToString) return;
+    setInterval(function () {
+      if (!navName) navName = engineString(M, 'overmind_nav');
+      var v = M.UTF8ToString(M._Cvar_VariableString(navName));
+      if (!v) return;
+      engineCommand(M, 'set overmind_nav ""');
+      if (v === 'home') { leave(); return; }
+      var server = v === '2' ? 2 : 1;
+      M.websocket.url = wsUrl(server);
+      engineCommand(M, 'connect overmind-' + server);
+    }, 300);
+  }
 
   // touch layer needs the canvas and an engine with the Overmind_* API
   function attachTouch(M, tries) {
@@ -196,10 +230,11 @@
     if (c && document.activeElement !== c) c.focus();
   });
 
-  document.getElementById('exit').addEventListener('click', function () {
+  function leave() {
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
     location.href = BASE; // full reload is the cleanest teardown of the wasm runtime
-  });
+  }
+  document.getElementById('exit').addEventListener('click', leave);
 
   document.querySelectorAll('[data-server]').forEach(function (b) {
     b.addEventListener('click', function () { start(+b.getAttribute('data-server')); });
