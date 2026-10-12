@@ -10,7 +10,8 @@ import socket
 import sys
 import tempfile
 
-SERVERS = {"1": 30721, "2": 30722}
+# tremded binds port..port+2 (one socket per protocol), so instances sit 10 apart
+SERVERS = {"1": 30710, "2": 30720}
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/opt/tremulous/web/status.json"
 
 

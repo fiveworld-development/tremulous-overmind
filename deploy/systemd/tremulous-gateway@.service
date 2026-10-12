@@ -9,7 +9,7 @@ BindsTo=tremulous-server@%i.service
 Type=simple
 User=trem
 Group=trem
-ExecStart=/opt/tremulous/venv/bin/websockify 127.0.0.1:2796%i 127.0.0.1:3072%i
+ExecStart=/opt/tremulous/venv/bin/websockify 127.0.0.1:2796%i 127.0.0.1:307%i0
 Restart=always
 RestartSec=2
 

@@ -12,7 +12,7 @@ WorkingDirectory=/opt/tremulous/server
 ExecStart=/opt/tremulous/server/tremded \
     +set dedicated 1 \
     +set net_ip 127.0.0.1 +set net_ip6 ::1 +set net_enabled 1 \
-    +set net_port 3072%i \
+    +set net_port 307%i0 \
     +set fs_basepath /opt/tremulous/server \
     +set fs_homepath /opt/tremulous/servers/%i \
     +set com_hunkmegs 128 \
