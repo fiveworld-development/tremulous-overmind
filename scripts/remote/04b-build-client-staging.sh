@@ -7,6 +7,7 @@ set -euo pipefail
 cd /   # sudo -u trem cannot stat the caller's home
 B=/opt/tremulous
 ENGINE_REF=00555626cd3e9da2dc9e2b6e608055261e15c21a
+BOTS_REF=e37dadc495350b58e5d8d94a7fb04121fd3e367e   # lepe/trem-gpp-bots, base of patches/bots
 EMSDK_VERSION=3.1.74
 REPO=https://github.com/fiveworld-development/tremulous-overmind
 as_trem() { sudo -n -u trem -H env HOME="$B" "$@"; }
@@ -33,17 +34,28 @@ for p in $(sudo -n find "$W/overmind/patches/engine" -name '*.patch' | sort); do
     echo "== $(basename "$p")"
     as_trem git -C "$W/engine" apply --whitespace=nowarn "$p"
 done
+# the bot game's cgame, linked into the client as native wasm (engine patch 0008);
+# must be the same source as the servers' cgame.qvm (03-build-on-host.sh)
+as_trem git clone -q --filter=blob:none https://github.com/lepe/trem-gpp-bots.git "$W/bots"
+as_trem git -C "$W/bots" checkout -q "$BOTS_REF"
+for p in $(sudo -n find "$W/overmind/patches/bots" -name '*.patch' | sort); do
+    echo "== $(basename "$p")"
+    as_trem git -C "$W/bots" apply --whitespace=nowarn "$p"
+done
 
 echo "== wasm client (capped: 1.2G RAM, low CPU weight)"
 sudo -n systemd-run --quiet --wait --pipe --collect -p MemoryMax=1200M -p CPUWeight=20 \
     --uid=trem --gid=trem -E HOME="$B" bash -c "
         set -e
         source '$E/emsdk_env.sh' >/dev/null 2>&1
+        nice -n 15 bash '$W/overmind/scripts/remote/build-native-cgame.sh' '$W/bots' '$W/libovcg.a' > '$W/cgame.log' 2>&1 \
+            || { tail -30 '$W/cgame.log'; exit 1; }
+        tail -2 '$W/cgame.log'
         cd '$W/engine'
         nice -n 15 emmake make -j2 release PLATFORM=js BUILD_CLIENT=1 BUILD_SERVER=0 \
-            BUILD_GAME_SO=0 BUILD_GAME_QVM=0 > '$W/client.log' 2>&1 \
+            BUILD_GAME_SO=0 BUILD_GAME_QVM=0 OVERMIND_CGAME_LIB='$W/libovcg.a' > '$W/client.log' 2>&1 \
         || nice -n 15 emmake make release PLATFORM=js BUILD_CLIENT=1 BUILD_SERVER=0 \
-            BUILD_GAME_SO=0 BUILD_GAME_QVM=0 >> '$W/client.log' 2>&1
+            BUILD_GAME_SO=0 BUILD_GAME_QVM=0 OVERMIND_CGAME_LIB='$W/libovcg.a' >> '$W/client.log' 2>&1
     " || { sudo -n tail -40 "$W/client.log"; exit 1; }
 
 D="$B/build/client-staging"   # staging only: never picked up by deploys

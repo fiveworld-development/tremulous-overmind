@@ -1,0 +1,93 @@
+diff --git a/Makefile b/Makefile
+index 043db81..81d1720 100644
+--- a/Makefile
++++ b/Makefile
+@@ -845,6 +845,12 @@ ifeq ($(PLATFORM),js)
+     -s EXPORT_NAME=\"tremulous\" \
+     $(OPTIMIZE)
+ 
++  # 0008: native cgame (scripts/remote/build-native-cgame.sh). whole-archive: the engine
++  # only references it weakly, which would not pull the members out of the archive
++  ifneq ($(OVERMIND_CGAME_LIB),)
++    CLIENT_LDFLAGS += -Wl,--whole-archive $(OVERMIND_CGAME_LIB) -Wl,--no-whole-archive
++  endif
++
+   SERVER_LDFLAGS += --js-library $(LIBSYSCOMMON) \
+     --js-library $(LIBSYSNODE) \
+     -s WASM=0 \
+diff --git a/src/qcommon/vm.cpp b/src/qcommon/vm.cpp
+index a8b3633..d361331 100644
+--- a/src/qcommon/vm.cpp
++++ b/src/qcommon/vm.cpp
+@@ -572,6 +572,41 @@ vm_t *VM_Restart(vm_t *vm, bool unpure)
+ 	return vm;
+ }
+ 
++#ifdef EMSCRIPTEN
++/*
++================
++Overmind 0008: the client game module (cgame) built from the same source as the
++server's cgame.qvm can be linked into the wasm (scripts/remote/build-native-cgame.sh,
++symbols prefixed ovcg_). It then runs as native wasm instead of through the bytecode
++interpreter, which cost about 10 ms a frame. Weak: without the library the qvm is used.
++vm_cgameNative 0 also falls back to the qvm.
++================
++*/
++extern "C" {
++__attribute__((weak)) intptr_t ovcg_vmMain( int command, int arg0, int arg1, int arg2, int arg3,
++	int arg4, int arg5, int arg6, int arg7, int arg8, int arg9, int arg10, int arg11 );
++__attribute__((weak)) void ovcg_dllEntry( intptr_t (QDECL *syscallptr)( intptr_t arg, ... ) );
++}
++
++// VM_Call hands the entry point callnum plus three arguments through a variadic
++// pointer; wasm checks call signatures, so this adapter sits in between
++static intptr_t QDECL VM_NativeCgameEntry( int callnum, ... )
++{
++	int a[3];
++	va_list ap;
++	va_start( ap, callnum );
++	for ( int i = 0; i < 3; i++ )
++		a[i] = va_arg( ap, int );
++	va_end( ap );
++	return ovcg_vmMain( callnum, a[0], a[1], a[2], 0, 0, 0, 0, 0, 0, 0, 0, 0 );
++}
++
++static bool VM_IsNativeCgame( const vm_t *vm )
++{
++	return ovcg_vmMain && vm->dllHandle == (void *)&ovcg_vmMain;
++}
++#endif
++
+ /*
+ ================
+ VM_Create
+@@ -617,6 +652,19 @@ vm_t *VM_Create( const char *module, intptr_t (*systemCalls)(intptr_t *),
+ 
+ 	Q_strncpyz(vm->name, module, sizeof(vm->name));
+ 
++#ifdef EMSCRIPTEN
++	if ( !Q_stricmp( module, "cgame" ) && ovcg_vmMain && ovcg_dllEntry &&
++		 Cvar_Get( "vm_cgameNative", "1", CVAR_ARCHIVE )->integer )
++	{
++		ovcg_dllEntry( VM_DllSyscall );
++		vm->entryPoint = VM_NativeCgameEntry;
++		vm->dllHandle = (void *)&ovcg_vmMain;
++		vm->systemCall = systemCalls;
++		Com_Printf( "cgame: native wasm (linked in)\n" );
++		return vm;
++	}
++#endif
++
+ 	do
+ 	{
+ 		retval = FS_FindVM(&startSearch, filename, sizeof(filename), module, (interpret == VMI_NATIVE));
+@@ -717,6 +765,9 @@ void VM_Free( vm_t *vm ) {
+ 		vm->destroy(vm);
+ 
+ 	if ( vm->dllHandle ) {
++#ifdef EMSCRIPTEN
++		if ( !VM_IsNativeCgame( vm ) )	// linked in, nothing to unload
++#endif
+ 		Sys_UnloadDll( vm->dllHandle );
+ 		::memset( vm, 0, sizeof( *vm ) );
+ 	}
