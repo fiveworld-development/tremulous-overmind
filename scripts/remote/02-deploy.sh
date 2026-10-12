@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Deploys / updates Tremulous Overmind on the host. Idempotent.
-# usage: 02-deploy.sh <public host name> [git ref]
+# usage: 02-deploy.sh <public host name> [git ref] [nightly|local]
 #   needs: 01-bootstrap.sh done (user "trem", /opt/tremulous, sources)
 set -euo pipefail
 HOST_NAME=${1:?host name, e.g. play.webnova360.com}
 REF=${2:-main}
+ARTIFACTS=${3:-${ARTIFACTS:-nightly}}   # nightly | local
 REPO=https://github.com/fiveworld-development/tremulous-overmind
 WEBSOCKIFY_COMMIT=7ad65ad51ffe9e186cf78a41fb3b2235fd5fc14e   # justinl1996/websockify "hacky support for udp"
 B=/opt/tremulous
@@ -21,16 +22,24 @@ fi
 O="$B/src/overmind"
 SHA=$(as_trem git -C "$O" rev-parse --short HEAD)
 
-echo "== release artifacts (nightly)"
-DL="$B/src/dl-$SHA"
-as_trem mkdir -p "$DL"
-for f in web-client.tar.gz server.tar.gz SHA256SUMS; do
-    as_trem curl -fsSL -o "$DL/$f" "$REPO/releases/download/nightly/$f"
-done
-( cd "$DL" && sha256sum -c SHA256SUMS )
-as_trem mkdir -p "$DL/client" "$DL/server"
-as_trem tar -xzf "$DL/web-client.tar.gz" -C "$DL/client"
-as_trem tar -xzf "$DL/server.tar.gz" -C "$DL/server"
+if [ "$ARTIFACTS" = local ]; then
+    echo "== artifacts: host build (03-build-on-host.sh)"
+    DL="$B/build/dist"
+else
+    echo "== release artifacts (nightly)"
+    DL="$B/src/dl-$SHA"
+    as_trem mkdir -p "$DL"
+    for f in web-client.tar.gz server.tar.gz SHA256SUMS; do
+        as_trem curl -fsSL -o "$DL/$f" "$REPO/releases/download/nightly/$f"
+    done
+    ( cd "$DL" && sudo -n -u trem sha256sum -c SHA256SUMS )
+    as_trem mkdir -p "$DL/client" "$DL/server"
+    as_trem tar -xzf "$DL/web-client.tar.gz" -C "$DL/client"
+    as_trem tar -xzf "$DL/server.tar.gz" -C "$DL/server"
+fi
+# without our own client build, build-web.js falls back to the upstream prebuilt client
+CLIENT_ARG=""
+sudo -n test -f "$DL/client/tremulous.wasm" && CLIENT_ARG="--client '$DL/client'"
 
 echo "== dedicated server"
 as_trem mkdir -p "$B/server/gpp"
@@ -57,7 +66,7 @@ echo "== websocket gateway"
 echo "== web ($SHA)"
 REL="$B/web/releases/$SHA"
 as_trem mkdir -p "$B/build/pk3" "$B/web/releases"
-as_trem bash -c "cd '$O' && node scripts/build-web.js --stack '$B/src/web-stack' --client '$DL/client' \
+as_trem bash -c "cd '$O' && node scripts/build-web.js --stack '$B/src/web-stack' $CLIENT_ARG \
     --pk3 '$B/build/pk3' --out '$REL' --base /play-tremulous/"
 # the servers need our paks too (pure servers only accept paks they have)
 as_trem cp "$B"/build/pk3/*.pk3 "$B/server/gpp/"

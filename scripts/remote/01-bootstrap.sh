@@ -26,5 +26,5 @@ clone https://github.com/justinl1996/tremulous_web.git web-stack
 clone https://github.com/justinl1996/websockify.git websockify
 as_trem git -C "$B/src/web-stack" lfs pull
 
-du -sh "$B/src"/*
-ls -la "$B/src/web-stack/tremulous_assets" | head -30
+sudo -n du -sh "$B/src"/engine "$B/src"/gppbots "$B/src"/web-stack "$B/src"/websockify
+sudo -n ls -la "$B/src/web-stack/tremulous_assets" | head -30
