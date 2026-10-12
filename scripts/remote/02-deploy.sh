@@ -54,7 +54,14 @@ for i in 1 2; do
     as_trem mkdir -p "$G/vm"
     as_trem install -m 0640 "$O/deploy/server/$cfg.cfg" "$G/server.cfg"
     as_trem install -m 0640 "$O/deploy/server/$cfg-maprotation.cfg" "$G/maprotation.cfg"
-    as_trem install -m 0640 "$DL/server/vm/game.qvm" "$G/vm/game.qvm"
+    # The trem-gpp-bots QVM speaks the older GPP entity layout; 1.3 clients drop with
+    # "Bad corpseNum". Until the bot AI is ported to 1.3, run the stock 1.3 game module
+    # (vms-gpp-v1.3.0.pk3). BOT_QVM=1 re-enables the bot build for testing.
+    if [ "${BOT_QVM:-0}" = 1 ]; then
+        as_trem install -m 0640 "$DL/server/vm/game.qvm" "$G/vm/game.qvm"
+    else
+        as_trem rm -f "$G/vm/game.qvm"
+    fi
     as_trem cp -r "$DL/server/bot/." "$G/"
 done
 
