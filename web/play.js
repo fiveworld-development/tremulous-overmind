@@ -64,6 +64,10 @@
       '+set', 'fs_homepath', 'tremulous_home',
       '+set', 'cl_allowDownload', '0',
       '+set', 'name', '"' + playerName() + '"',
+      // network: 40-player snapshots need more than the 25 kB/s default, and 30 input
+      // packets a second feel sluggish; frames uncapped for 120 Hz displays
+      '+set', 'rate', '90000', '+set', 'snaps', '40', '+set', 'cl_maxpackets', '125',
+      '+set', 'com_maxfps', '0',
       // render at the play area's size; later resizes go through Overmind_Resize
       '+set', 'r_mode', '-1',
       '+set', 'r_width', String(size[0]), '+set', 'r_height', String(size[1]),

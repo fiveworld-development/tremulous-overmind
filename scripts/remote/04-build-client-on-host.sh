@@ -35,8 +35,8 @@ for p in $(sudo -n find "$W/overmind/patches/engine" -name '*.patch' | sort); do
 done
 
 echo "== wasm client (capped: 1.2G RAM, low CPU weight)"
-sudo -n systemd-run --quiet --scope -p MemoryMax=1200M -p CPUWeight=20 \
-    sudo -n -u trem -H env HOME="$B" bash -c "
+sudo -n systemd-run --quiet --wait --pipe --collect -p MemoryMax=1200M -p CPUWeight=20 \
+    --uid=trem --gid=trem -E HOME="$B" bash -c "
         set -e
         source '$E/emsdk_env.sh' >/dev/null 2>&1
         cd '$W/engine'
