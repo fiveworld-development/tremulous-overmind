@@ -85,6 +85,7 @@ for u in tremulous-server@.service tremulous-gateway@.service tremulous-status.s
     sudo -n install -m 0644 "$O/deploy/systemd/$u" "/etc/systemd/system/$u"
 done
 sudo -n systemctl daemon-reload
+sudo -n systemctl reset-failed 'tremulous-*' 2>/dev/null || true
 for i in 1 2; do
     sudo -n systemctl enable -q "tremulous-server@$i" "tremulous-gateway@$i"
     sudo -n systemctl restart "tremulous-server@$i" "tremulous-gateway@$i"
