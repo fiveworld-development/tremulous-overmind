@@ -65,6 +65,97 @@ index dd2caef..baf5c05 100644
    if( cmd != dialog )
    {
      trap_SendConsoleCommand( cmd );
+diff --git a/src/cgame/cg_view.c b/src/cgame/cg_view.c
+index 160b735..14f9a00 100644
+--- a/src/cgame/cg_view.c
++++ b/src/cgame/cg_view.c
+@@ -1374,6 +1374,78 @@ static void CG_PlayBufferedSounds( void )
+ 
+ //=========================================================================
+ 
++/*
++=================
++CG_OvermindAim
++
++Overmind: auto-fire for the browser's touch controls. Sets overmind_aim to 1
++while the crosshair rests on a living enemy (player or structure) within reach
++of the held weapon, else 0. Builders, charge and lob weapons never auto-fire.
++Only runs while overmind_touch is set; the cvar is written on change only.
++=================
++*/
++static void CG_OvermindAim( void )
++{
++  static int    touch = -1, nextCheck = 0, last = -1;
++  static vec3_t mins = { -4, -4, -4 }, maxs = { 4, 4, 4 };
++  trace_t       trace;
++  vec3_t        end;
++  float         range;
++  int           on = 0, myTeam;
++
++  if( touch < 0 || cg.time > nextCheck || cg.time < nextCheck - 2000 )
++  {
++    char buf[ 8 ];
++    trap_Cvar_VariableStringBuffer( "overmind_touch", buf, sizeof( buf ) );
++    touch = atoi( buf );
++    nextCheck = cg.time + 1000;
++  }
++  if( !touch )
++    return;
++
++  myTeam = cg.snap->ps.stats[ STAT_TEAM ];
++  switch( cg.snap->ps.weapon )
++  {
++    case WP_ALEVEL0:                          range = LEVEL0_BITE_RANGE; break;
++    case WP_ALEVEL1: case WP_ALEVEL1_UPG:     range = LEVEL1_CLAW_U_RANGE; break;
++    case WP_ALEVEL2: case WP_ALEVEL2_UPG:     range = LEVEL2_CLAW_U_RANGE; break;
++    case WP_ALEVEL3: case WP_ALEVEL3_UPG:     range = LEVEL3_CLAW_UPG_RANGE; break;
++    case WP_ALEVEL4:                          range = LEVEL4_CLAW_RANGE; break;
++    case WP_PAIN_SAW:                         range = PAINSAW_RANGE; break;
++    case WP_FLAMER:                           range = FLAMER_SPEED * FLAMER_LIFETIME / 1000.0f; break;
++    case WP_BLASTER: case WP_MACHINEGUN: case WP_SHOTGUN: case WP_LAS_GUN:
++    case WP_MASS_DRIVER: case WP_CHAINGUN: case WP_PULSE_RIFLE:
++                                              range = 4000.0f; break;
++    default:                                  range = 0.0f; break;   // builders, luci, grenade
++  }
++
++  if( range > 0.0f && myTeam != TEAM_NONE && cg.snap->ps.stats[ STAT_HEALTH ] > 0 &&
++      ( cg.snap->ps.pm_type == PM_NORMAL || cg.snap->ps.pm_type == PM_JETPACK ) )
++  {
++    range += 16.0f;   // melee reach is measured from the muzzle to the target's box
++    VectorMA( cg.refdef.vieworg, range, cg.refdef.viewaxis[ 0 ], end );
++    CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, end, cg.snap->ps.clientNum,
++      CONTENTS_SOLID | CONTENTS_BODY );
++    if( trace.entityNum < MAX_CLIENTS )
++    {
++      team_t team = cgs.clientinfo[ trace.entityNum ].team;
++      on = team != TEAM_NONE && team != myTeam;
++    }
++    else if( trace.entityNum < ENTITYNUM_WORLD )
++    {
++      entityState_t *es = &cg_entities[ trace.entityNum ].currentState;
++      on = es->eType == ET_BUILDABLE && !( es->eFlags & EF_DEAD ) &&
++           BG_Buildable( es->modelindex )->team != myTeam;
++    }
++  }
++
++  if( on != last )
++  {
++    last = on;
++    trap_Cvar_Set( "overmind_aim", on ? "1" : "0" );
++  }
++}
++
+ /*
+ =================
+ CG_DrawActiveFrame
+@@ -1435,6 +1507,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
+ 
+   // build cg.refdef
+   inwater = CG_CalcViewValues( );
++  CG_OvermindAim( );
+ 
+   // build the render lists
+   if( !cg.hyperspace )
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
 index f68a52a..9a611de 100644
 --- a/src/game/g_bot.c

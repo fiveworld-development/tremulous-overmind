@@ -85,9 +85,17 @@
     args.push('+set', 'cg_tutorial', isTouch ? '0' : '1');
     // touch: the page draws large team/spawn pickers instead of the engine's menus
     args.push('+set', 'overmind_touch', isTouch ? '1' : '0');
+    // touch: the team list sits exactly where the left thumb steers
+    if (isTouch) args.push('+set', 'cg_drawTeamOverlay', '0');
     // warnings ("team full", "can't build here") as a text line, not a modal box
     // in the middle of the screen that has to be clicked away
     args.push('+set', 'cg_disableWarningDialogs', '1');
+    // desktop: the player's own key bindings and mouse settings (touch.js needs the stock keys)
+    var settings = !isTouch && window.OvermindSettings;
+    if (settings) {
+      settings.installPointerLockPatch();
+      args = args.concat(settings.args());
+    }
     if (server) args.push('+connect', 'overmind-' + server);
 
     // SDL's "desktop mode" in the browser is screen.width/height, so a windowed browser
@@ -118,6 +126,7 @@
           var wait = Math.max(0, 1400 - (performance.now() - t0));
           setTimeout(function () { progress(100); splash.classList.add('done'); }, wait);
           if (isTouch) attachTouch(M, 0);
+          if (settings) attachSettings(M);
           watchNav(M);
         }
       });
@@ -142,6 +151,23 @@
     M._Overmind_Command(p);
     M._free(p);
   }
+  // desktop controls panel: the ⚙ button or F10; bindings apply live and are saved
+  function attachSettings(M) {
+    if (!M._Overmind_Command) return;
+    var btn = document.getElementById('controls');
+    var toggle = function () {
+      if (OvermindSettings.isOpen()) OvermindSettings.close();
+      else OvermindSettings.open(function (cmd) { engineCommand(M, cmd); });
+    };
+    btn.hidden = false;
+    btn.addEventListener('click', toggle);
+    window.addEventListener('keydown', function (e) {
+      if (e.key !== 'F10') return;
+      e.preventDefault(); e.stopPropagation();
+      toggle();
+    }, true);
+  }
+
   var navName = 0;
   function watchNav(M) {
     if (!M._Cvar_VariableString || !M._Overmind_Command || !M.UTF8ToString) return;

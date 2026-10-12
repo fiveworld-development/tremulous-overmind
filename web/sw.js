@@ -2,7 +2,7 @@
 // instantly. Game data (assets/*.pk3) is cached by the engine itself, status and
 // websockets always go to the network.
 'use strict';
-var CACHE = 'overmind-shell-%ENGINE_VER%';
+var CACHE = 'overmind-shell-%SHELL_VER%';
 var BASE = '%BASE%';
 
 self.addEventListener('install', function (e) {

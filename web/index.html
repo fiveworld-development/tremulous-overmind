@@ -21,7 +21,7 @@
 <link rel="apple-touch-icon" href="%BASE%img/icons/apple-touch-icon.png">
 <link rel="manifest" href="%BASE%site.webmanifest">
 <link rel="preload" href="%BASE%img/hero.jpg" as="image">
-<link rel="stylesheet" href="%BASE%style.css">
+<link rel="stylesheet" href="%BASE%style.css?v=%SHELL_VER%">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"VideoGame","name":"Tremulous Overmind","alternateName":"Tremulous Browser Edition","description":"Free browser version of Tremulous, the team-based aliens versus humans first person shooter with real-time strategy elements.","genre":["First-person shooter","Real-time strategy"],"gamePlatform":["Web browser","PC","Tablet","Mobile"],"playMode":["MultiPlayer"],"applicationCategory":"Game","operatingSystem":"Any (web browser)","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"publisher":{"@type":"Organization","name":"WebNova360","url":"https://webnova360.com"}}
 </script>
@@ -139,10 +139,12 @@
   <div id="touch" class="touch" hidden></div>
   <div class="rotate" role="status"><p><b>⟳</b>Turn your device sideways</p></div>
   <button id="exit" class="exit" type="button" aria-label="Leave game" title="Leave game">×</button>
+  <button id="controls" class="exit controls" type="button" aria-label="Controls and key bindings" title="Controls (F10)" hidden>⚙</button>
 </div>
 
 <noscript><p class="noscript">Tremulous needs JavaScript and WebGL 2.</p></noscript>
-<script src="%BASE%touch.js" defer></script>
-<script src="%BASE%play.js" defer></script>
+<script src="%BASE%settings.js?v=%SHELL_VER%" defer></script>
+<script src="%BASE%touch.js?v=%SHELL_VER%" defer></script>
+<script src="%BASE%play.js?v=%SHELL_VER%" defer></script>
 </body>
 </html>

@@ -114,12 +114,18 @@ function main() {
     // 3. pages
     const engineVer = crc32(Buffer.from(js)).toString(36);
     const web = path.join(root, 'web');
+    // page scripts/styles are cached first by sw.js: their URLs and the cache name must
+    // change whenever any of them does, not only when the engine does
+    const shellVer = crc32(Buffer.concat([Buffer.from(js), ...fs.readdirSync(web).sort()
+        .filter(f => fs.statSync(path.join(web, f)).isFile())
+        .map(f => fs.readFileSync(path.join(web, f)))])).toString(36);
     for (const f of fs.readdirSync(web)) {
         const src = path.join(web, f);
         if (fs.statSync(src).isDirectory()) { fs.cpSync(src, path.join(out, f), { recursive: true }); continue; }
         let text = fs.readFileSync(src);
         if (/\.(html|js|css|txt|xml|json|webmanifest)$/.test(f)) {
-            text = text.toString('utf8').replaceAll('%BASE%', base).replaceAll('%ENGINE_VER%', engineVer);
+            text = text.toString('utf8').replaceAll('%BASE%', base).replaceAll('%ENGINE_VER%', engineVer)
+                .replaceAll('%SHELL_VER%', shellVer);
         }
         fs.writeFileSync(path.join(out, f), text);
     }
