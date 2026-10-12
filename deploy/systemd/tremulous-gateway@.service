@@ -13,9 +13,12 @@ ExecStart=/opt/tremulous/venv/bin/websockify 127.0.0.1:2796%i 127.0.0.1:307%i0
 Restart=always
 RestartSec=2
 
-Nice=5
-CPUWeight=40
-CPUQuota=40%
+# latency matters more than throughput: every game packet passes through here, and
+# a gateway waiting for CPU delivers snapshots late and in bursts (felt as lag).
+# It needs little CPU, so a high weight costs the other sites on this host little.
+Nice=-5
+CPUWeight=400
+CPUQuota=60%
 MemoryHigh=120M
 MemoryMax=180M
 TasksMax=128
