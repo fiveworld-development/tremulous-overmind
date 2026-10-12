@@ -20,9 +20,12 @@ ExecStart=/opt/tremulous/server/tremded \
 Restart=always
 RestartSec=3
 
-# resources: signalcanna.com on this host always wins
-Nice=10
-CPUWeight=40
+# resources: a fair share, capped. The host has 2 cores and runs near 90 % CPU
+# pressure; at a lower weight the server missed frames under load, which players
+# see as freezes every few seconds. Each instance needs ~30 % of a core, the quota
+# keeps it from ever taking more than 70 %.
+Nice=0
+CPUWeight=100
 CPUQuota=70%
 IOWeight=40
 MemoryHigh=220M

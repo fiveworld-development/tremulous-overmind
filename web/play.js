@@ -77,6 +77,9 @@
       '+set', 'r_width', String(size[0]), '+set', 'r_height', String(size[1]),
       '+set', 'r_customwidth', String(size[0]), '+set', 'r_customheight', String(size[1])
     ];
+    // the engine's tutorial lines talk about keys and mouse buttons; on touch the
+    // on-screen buttons are labelled instead
+    args.push('+set', 'cg_tutorial', isTouch ? '0' : '1');
     if (server) args.push('+connect', 'overmind-' + server);
 
     // SDL's "desktop mode" in the browser is screen.width/height, so a windowed browser
