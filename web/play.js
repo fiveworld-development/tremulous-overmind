@@ -64,6 +64,18 @@
     ];
     if (server) args.push('+connect', 'overmind-' + server);
 
+    // SDL's "desktop mode" in the browser is screen.width/height, so a windowed browser
+    // renders at monitor size and gets squashed into the window. Report the play area
+    // instead (the page reloads when the game is left, so this never outlives it).
+    ['width', 'height', 'availWidth', 'availHeight'].forEach(function (k) {
+      var h = /height/i.test(k);
+      try {
+        Object.defineProperty(screen, k, { configurable: true, get: function () {
+          return h ? (frame.offsetHeight || innerHeight) : (frame.offsetWidth || innerWidth);
+        } });
+      } catch (e) { /* engine falls back to the real screen size */ }
+    });
+
     var t0 = performance.now();
     loadEngine().then(function (tremulous) {
       progress(45, 'Starting…');
