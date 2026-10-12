@@ -48,8 +48,10 @@
         '<button class="t-use" data-tap="' + A.USE + '" aria-label="Use, evolve, build">Use</button>' +
         '<button class="t-reload" data-tap="' + A.RELOAD + '" aria-label="Reload">Rld</button>' +
         '<button class="t-weap" data-tap="' + A.NEXT + '" aria-label="Next weapon">Wpn</button>' +
-      '</div>';
+      '</div>' +
+      '<div class="t-pick" hidden><p class="t-pick-title"></p><div class="t-pick-row"></div><div class="t-pick-alt"></div></div>';
     root.hidden = false;
+    var pick = root.querySelector('.t-pick');
     var stick = root.querySelector('.t-stick');
     var knob = stick.querySelector('b');
     var sensBtn = root.querySelector('[data-ui="sens"]');
@@ -66,10 +68,68 @@
       stick.style.left = stick.style.top = ''; knob.style.transform = '';
       M._Overmind_Pointer(-1, -1);
     }
+    // ---------- engine strings: cvars in, console commands out
+    var namePtr = 0;
+    function cstr(s) {
+      var n = s.length * 3 + 1, p = M._malloc(n);
+      M.stringToUTF8(s, p, n);
+      return p;
+    }
+    function command(text) {
+      var p = cstr(text);
+      M._Overmind_Command(p);
+      M._free(p);
+    }
+    function playerState() {
+      if (!M._Cvar_VariableString || !M.UTF8ToString) return null;
+      if (!namePtr) namePtr = cstr('overmind_state');
+      var v = M.UTF8ToString(M._Cvar_VariableString(namePtr)).split(' ').map(Number);
+      return v.length >= 3 ? { team: v[0], cls: v[1], pm: v[2], stage: v[3] || 0 } : null;
+    }
+    // the game skips its small team/spawn menus when this is set (cgame patch)
+    command('set overmind_touch 1');
+    command('set cg_disableWarningDialogs 1');
+
+    // ---------- large team and spawn pickers
+    var TEAMS = { 1: 'Aliens', 2: 'Humans' };
+    var SPAWNS = {
+      1: [['level0', 'Dretch', 'Fast biter. Kill to evolve.'], ['builder', 'Granger', 'Builds the alien base.']],
+      2: [['rifle', 'Rifle', 'Soldier. Earn credits, buy gear.'], ['ckit', 'Builder', 'Builds the human base.']]
+    };
+    var pickKey = '', pickHold = 0;
+    function button(cmd, label, sub, cls) {
+      return '<button class="' + (cls || '') + '" data-pick="' + cmd + '"><b>' + label + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</button>';
+    }
+    function showPick(st) {
+      var key = !st ? '' : st.team === 0 ? 'team' : st.cls === 0 && st.pm !== 5 ? 'spawn' + st.team : '';
+      if (Date.now() < pickHold) key = '';
+      if (key === pickKey) return;
+      pickKey = key;
+      pick.hidden = !key;
+      root.toggleAttribute('data-picking', !!key);
+      if (!key) return;
+      var title = pick.querySelector('.t-pick-title'), row = pick.querySelector('.t-pick-row'), alt = pick.querySelector('.t-pick-alt');
+      if (key === 'team') {
+        title.textContent = 'Choose your side';
+        row.innerHTML = button('team aliens', 'Aliens', 'Evolve and overrun', 'p-alien') +
+                        button('team humans', 'Humans', 'Build, buy and defend', 'p-human');
+        alt.innerHTML = button('team auto', 'Auto', '', 'p-small');
+      } else {
+        title.textContent = TEAMS[st.team] + ': spawn as';
+        row.innerHTML = SPAWNS[st.team].map(function (s) {
+          return button('class ' + s[0], s[1], s[2], st.team === 1 ? 'p-alien' : 'p-human');
+        }).join('');
+        alt.innerHTML = button(st.team === 1 ? 'team humans' : 'team aliens', 'Switch to ' + TEAMS[st.team === 1 ? 2 : 1], '', 'p-small');
+      }
+    }
+
+    var pollN = 0;
     function poll() {
       var s = M._Overmind_State();
+      var inGame = (s & 0x100) && !(s & 0x7);
       // KEYCATCH_UI (2) / CONSOLE (1) / MESSAGE (4) or not in a game: menus
-      setMode((s & 0x100) && !(s & 0x7) ? 'game' : 'menu');
+      setMode(inGame ? 'game' : 'menu');
+      if ((pollN++ & 1) === 0) showPick(inGame ? playerState() : null);
     }
     var pollTimer = setInterval(poll, 120);
     poll();
@@ -108,6 +168,14 @@
       wakeAudio();
       for (var i = 0; i < e.changedTouches.length; i++) {
         var t = e.changedTouches[i];
+        var pk = t.target.closest ? t.target.closest('[data-pick]') : null;
+        if (pk) {
+          command(pk.getAttribute('data-pick'));
+          pk.classList.add('down');
+          pickHold = Date.now() + 1500; // until the server has answered
+          showPick(null);
+          continue;
+        }
         if (mode === 'menu') {
           var p = canvasPoint(t);
           M._Overmind_Pointer(p[0], p[1]);

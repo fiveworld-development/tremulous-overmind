@@ -57,7 +57,7 @@
     progress(8, 'Loading engine…');
 
     var size = renderSize();
-    renderSizeAtStart = size;
+    lastRestart = Date.now() + 5000; // the engine boots at this size, give it time
     var args = [
       // quoted: the engine's command parser treats a bare "//" as a comment
       '+set', 'fs_cdn', '"' + location.origin + BASE + 'assets"',
@@ -80,6 +80,11 @@
     // the engine's tutorial lines talk about keys and mouse buttons; on touch the
     // on-screen buttons are labelled instead
     args.push('+set', 'cg_tutorial', isTouch ? '0' : '1');
+    // touch: the page draws large team/spawn pickers instead of the engine's menus
+    args.push('+set', 'overmind_touch', isTouch ? '1' : '0');
+    // warnings ("team full", "can't build here") as a text line, not a modal box
+    // in the middle of the screen that has to be clicked away
+    args.push('+set', 'cg_disableWarningDialogs', '1');
     if (server) args.push('+connect', 'overmind-' + server);
 
     // SDL's "desktop mode" in the browser is screen.width/height, so a windowed browser
@@ -127,34 +132,41 @@
     }
   }
 
-  // render size: the play area in CSS pixels, capped so huge monitors don't
-  // turn into a CPU/GPU benchmark (CSS stretches the rest)
+  // render size: the play area in device pixels, so text and edges are sharp on
+  // high-density phones and laptops. Capped by a pixel budget (about 1920x1200)
+  // so a 4K or 3x screen doesn't turn into a GPU benchmark; the aspect ratio is
+  // always the play area's, so nothing is ever stretched.
+  var PIXEL_BUDGET = 1920 * 1200;
   function renderSize() {
     var w = frame.offsetWidth || innerWidth, h = frame.offsetHeight || innerHeight;
-    var k = Math.min(1, 1920 / w, 1200 / h);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var k = Math.min(dpr, Math.sqrt(PIXEL_BUDGET / (w * h)));
     return [Math.round(w * k), Math.round(h * k)];
   }
 
-  // follow window resizes, rotation and fullscreen changes once they settle
-  // Each resize restarts the renderer, so only real, settled size changes count:
-  // same size or tiny jitter (mobile URL bars, scrollbars) is ignored, and a
-  // restart is never followed by another one within 2.5 s.
-  var resizeTimer = 0, applied = null, lastRestart = 0;
+  // Keep the engine's canvas matched to the play area. Rotation, fullscreen and
+  // mobile browser bars change it, sometimes several times in a row and while the
+  // engine is still loading, so instead of trusting single events the page checks
+  // the real canvas every second and fixes any mismatch. Each fix restarts the
+  // renderer, so tiny jitter is ignored and fixes are at least 3 s apart.
+  var lastRestart = 0, resizeTimer = 0;
+  function syncSize() {
+    if (!engineModule || !engineModule._Overmind_Resize || game.hidden) return;
+    var c = frame.querySelector('canvas');
+    if (!c || !c.width || !c.height) return;
+    var want = renderSize();
+    var aspectOff = Math.abs(c.width / c.height - want[0] / want[1]) > 0.02;
+    var sizeOff = Math.abs(c.width - want[0]) > want[0] * 0.08;
+    if (!aspectOff && !sizeOff) return;
+    if (Date.now() - lastRestart < 3000) return;
+    lastRestart = Date.now();
+    engineModule._Overmind_Resize(want[0], want[1]);
+  }
   function onResize() {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function () {
-      if (!engineModule || !engineModule._Overmind_Resize || game.hidden) return;
-      var s = renderSize();
-      if (!applied) applied = renderSizeAtStart;
-      if (applied && Math.abs(s[0] - applied[0]) < 24 && Math.abs(s[1] - applied[1]) < 24) return;
-      var wait = lastRestart + 2500 - Date.now();
-      if (wait > 0) { resizeTimer = setTimeout(onResize, wait); return; }
-      applied = s;
-      lastRestart = Date.now();
-      engineModule._Overmind_Resize(s[0], s[1]);
-    }, 500);
+    resizeTimer = setTimeout(syncSize, 500);
   }
-  var renderSizeAtStart = null;
+  setInterval(syncSize, 1000);
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', onResize);
   document.addEventListener('fullscreenchange', onResize);

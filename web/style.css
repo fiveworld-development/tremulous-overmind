@@ -248,6 +248,23 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
 .t-reload { right: calc(var(--u) * 1.4); bottom: calc(var(--u) * 2.3); width: calc(var(--u) * .75); height: calc(var(--u) * .6); font-size: .6rem; }
 .t-weap   { right: calc(var(--u) * 2.75); bottom: calc(var(--u) * 1.1); width: calc(var(--u) * .8); height: calc(var(--u) * .7); font-size: .62rem; }
 
+/* team and spawn picker (touch.js), drawn over the game while spectating or dead */
+.touch[data-picking] .t-pad, .touch[data-picking] .t-zone { display: none; }
+.t-pick { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .8rem;
+  padding: 1rem; background: rgba(0, 0, 0, .55); }
+.t-pick[hidden] { display: none; }
+.t-pick-title { margin: 0; font: 600 clamp(1rem, 4.2vmin, 1.4rem)/1 var(--menu); letter-spacing: .18em;
+  text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 3px #000; }
+.t-pick-row { display: flex; gap: clamp(.6rem, 3vmin, 1.2rem); }
+.t-pick-alt { display: flex; }
+.touch .t-pick button { position: static; display: flex; flex-direction: column; justify-content: center; gap: .45rem;
+  width: clamp(150px, 34vmin, 240px); min-height: clamp(84px, 24vmin, 130px); padding: .8rem; opacity: 1;
+  background: rgba(0, 0, 0, .72); font-size: clamp(1rem, 4.4vmin, 1.35rem); }
+.touch .t-pick button small { font: 400 clamp(.7rem, 2.8vmin, .85rem)/1.3 var(--text); letter-spacing: 0; text-transform: none; color: #c9c9c2; }
+.touch .t-pick .p-alien { border-color: rgba(200, 60, 40, .8); }
+.touch .t-pick .p-human { border-color: rgba(70, 140, 220, .8); }
+.touch .t-pick .p-small { width: auto; min-height: 0; padding: .55rem 1.2rem; font-size: .75rem; }
+
 /* phones held upright: the game needs landscape */
 .rotate { position: absolute; inset: 0; z-index: 5; display: none; place-items: center; padding: 2rem; background: #000;
   text-align: center; font: 600 1rem/1.5 var(--menu); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
