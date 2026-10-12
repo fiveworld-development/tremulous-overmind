@@ -1,3 +1,24 @@
+diff --git a/assets/ui/menudef.h b/assets/ui/menudef.h
+index cd30f77..54be3cc 100644
+--- a/assets/ui/menudef.h
++++ b/assets/ui/menudef.h
+@@ -189,6 +189,7 @@ enum
+   CG_LAGOMETER,
+   CG_SPEEDOMETER,
+   CG_PLAYER_CROSSHAIRNAMES,
++  CG_TEAM_STATUS,          // Overmind: kept in step with the 1.3 HUD files (data-web-1.3.1.pk3)
+   CG_STAGE_REPORT_TEXT,
+   CG_ALIENS_SCORE_LABEL,
+   CG_HUMANS_SCORE_LABEL,
+@@ -198,6 +199,8 @@ enum
+   CG_CONSOLE,
+   CG_TUTORIAL,
+   CG_CLOCK,
++  CG_KILLFEED,             // Overmind: 1.3 HUD ids, not drawn by this cgame
++  CG_PLAYER_THZ_SCANNER,
+ 
+   UI_NETSOURCE,
+   UI_NETMAPPREVIEW,
 diff --git a/src/cgame/cg_main.c b/src/cgame/cg_main.c
 index 0753dc5..317c315 100644
 --- a/src/cgame/cg_main.c
