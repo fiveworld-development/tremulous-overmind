@@ -909,7 +909,7 @@ index 78f9272..c3d3048 100644
  extern  vmCvar_t  g_bot_debug_verbosity;
  extern  vmCvar_t  g_bot_debug_type;
 diff --git a/src/game/g_main.c b/src/game/g_main.c
-index c4ea3eb..3a6baba 100644
+index c4ea3eb..db6598d 100644
 --- a/src/game/g_main.c
 +++ b/src/game/g_main.c
 @@ -164,6 +164,9 @@ vmCvar_t  g_bot_lcannon;
@@ -979,7 +979,24 @@ index c4ea3eb..3a6baba 100644
    G_ClearVotes( );
    G_BotDelAll( );
    G_RestoreCvars( );
-@@ -2580,6 +2603,11 @@ void G_CheckVote( team_t team )
+@@ -2047,8 +2070,14 @@ void ExitLevel( void )
+   level.changemap = NULL;
+   level.intermissiontime = 0;
+ 
+-  // remove paths
+-  BG_Free( level.paths );
++  // remove paths (Overmind: only once, and not when the map had none - BG_Free on
++  // NULL or on a freed block wrecks the allocator's free list)
++  if( level.paths )
++  {
++    BG_Free( level.paths );
++    level.paths = NULL;
++    level.numPaths = 0;
++  }
+ 
+   // reset all the scores so we don't enter the intermission again
+   for( i = 0; i < g_maxclients.integer; i++ )
+@@ -2580,6 +2609,11 @@ void G_CheckVote( team_t team )
      }
    }
  
@@ -991,7 +1008,7 @@ index c4ea3eb..3a6baba 100644
    if( pass )
      level.voteExecuteTime[ team ] = level.time + level.voteDelay[ team ];
  
-@@ -2922,6 +2950,29 @@ void G_RunFrame( int levelTime )
+@@ -2922,6 +2956,29 @@ void G_RunFrame( int levelTime )
    G_CalculateAvgPlayers( );
    G_UpdateZaps( msec );
  
@@ -1021,7 +1038,7 @@ index c4ea3eb..3a6baba 100644
    // see if it is time to end the level
    CheckExitRules( );
  
-@@ -2958,8 +3009,27 @@ void G_DeployBots( void )  {
+@@ -2958,8 +3015,27 @@ void G_DeployBots( void )  {
  	int alien_human_diff = alien_players - human_players;
  	int aliens = g_bot_minPerTeam.integer + level.extraAlienBots - (alien_human_diff < 0 ? alien_human_diff : 0);
  	int humans = g_bot_minPerTeam.integer + level.extraHumanBots + (alien_human_diff > 0 ? alien_human_diff : 0);
