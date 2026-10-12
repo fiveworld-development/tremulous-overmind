@@ -1,3 +1,49 @@
+diff --git a/src/cgame/cg_main.c b/src/cgame/cg_main.c
+index 0753dc5..317c315 100644
+--- a/src/cgame/cg_main.c
++++ b/src/cgame/cg_main.c
+@@ -425,6 +425,20 @@ static void CG_SetUIVars( void )
+   trap_Cvar_Set( "ui_carriage", carriageCvar );
+ 
+   trap_Cvar_Set( "ui_stages", va( "%d %d", cgs.alienStage, cgs.humanStage ) );
++
++  // Overmind: "team class pm_type stages" for the browser page, which draws the
++  // touch team/spawn picker from it. Only written when it changes.
++  {
++    static char last[ 32 ];
++    const char *s = va( "%d %d %d %d", cg.snap->ps.stats[ STAT_TEAM ],
++      cg.snap->ps.stats[ STAT_CLASS ], cg.snap->ps.pm_type,
++      cg.snap->ps.stats[ STAT_TEAM ] == TEAM_ALIENS ? cgs.alienStage : cgs.humanStage );
++    if( strcmp( s, last ) )
++    {
++      Q_strncpyz( last, s, sizeof( last ) );
++      trap_Cvar_Set( "overmind_state", s );
++    }
++  }
+ }
+ 
+ /*
+diff --git a/src/cgame/cg_servercmds.c b/src/cgame/cg_servercmds.c
+index dd2caef..baf5c05 100644
+--- a/src/cgame/cg_servercmds.c
++++ b/src/cgame/cg_servercmds.c
+@@ -854,6 +854,16 @@ void CG_Menu( int menu, int arg )
+   if( type == DT_COMMAND && cg_disableCommandDialogs.integer )
+     return;
+ 
++  // Overmind: on touch screens the page draws its own large team and spawn
++  // pickers from overmind_state, the small engine menus would sit underneath
++  if( ( menu == MN_TEAM || menu == MN_A_CLASS || menu == MN_H_SPAWN ) )
++  {
++    char touch[ 8 ];
++    trap_Cvar_VariableStringBuffer( "overmind_touch", touch, sizeof( touch ) );
++    if( atoi( touch ) )
++      return;
++  }
++
+   if( cmd != dialog )
+   {
+     trap_SendConsoleCommand( cmd );
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
 index f68a52a..9a611de 100644
 --- a/src/game/g_bot.c
