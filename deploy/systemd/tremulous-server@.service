@@ -9,6 +9,9 @@ Type=simple
 User=trem
 Group=trem
 WorkingDirectory=/opt/tremulous/server
+# every (re)start opens on a random map of the rotation (server.cfg: exec startmap.cfg),
+# so a restart never shows the same first map again; keeps the last pick on failure
+ExecStartPre=/bin/sh -c 'd=/opt/tremulous/servers/%i/gpp; m=$$(grep -E "^[[:space:]]+[A-Za-z0-9_]+[[:space:]]*$$" "$$d/maprotation.cfg" | tr -d " \\t\\r" | shuf -n1); if [ -n "$$m" ]; then echo "map $$m" > "$$d/startmap.cfg"; fi; true'
 ExecStart=/opt/tremulous/server/tremded \
     +set dedicated 1 \
     +set net_ip 127.0.0.1 +set net_ip6 ::1 +set net_enabled 1 \

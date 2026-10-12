@@ -54,6 +54,8 @@ for i in 1 2; do
     as_trem mkdir -p "$G/vm"
     as_trem install -m 0640 "$O/deploy/server/$cfg.cfg" "$G/server.cfg"
     as_trem install -m 0640 "$O/deploy/server/$cfg-maprotation.cfg" "$G/maprotation.cfg"
+    # fallback first map; the unit's ExecStartPre replaces it with a random pick
+    sudo -n test -f "$G/startmap.cfg" || echo "map $(grep -E '^[[:space:]]+[A-Za-z0-9_]+[[:space:]]*$' "$O/deploy/server/$cfg-maprotation.cfg" | tr -d ' \t\r' | tail -1)" | as_trem tee "$G/startmap.cfg" >/dev/null
     # Bots: the trem-gpp-bots game module uses an older entity layout than 1.3, so the
     # clients get its matching cgame.qvm (zz-overmind-vm.pk3, below). BOT_QVM=0 falls
     # back to the stock 1.3 game module without bots.
