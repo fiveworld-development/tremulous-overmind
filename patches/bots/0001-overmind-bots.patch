@@ -485,6 +485,26 @@ index 28e37a7..60d6f7b 100644
 +    G_BotBuildForTeam( team );
 +  }
 +}
+diff --git a/src/game/g_cmds.c b/src/game/g_cmds.c
+index 9b01056..7dfdbff 100644
+--- a/src/game/g_cmds.c
++++ b/src/game/g_cmds.c
+@@ -609,6 +609,15 @@ void Cmd_Team_f( gentity_t *ent )
+   else if( oldteam == TEAM_HUMANS )
+     humans--;
+ 
++  // With bots filling the teams, balance on real players only: anyone may pick the
++  // side they want, and a bot of that team gives up its seat right away
++  // (G_ChangeTeam -> G_DeployBotsExec).
++  if( g_bot_fillTeam.integer > 0 )
++  {
++    aliens -= level.alienBots;
++    humans -= level.humanBots;
++  }
++
+   // stop team join spam
+   if( ent->client->pers.teamChangeTime && 
+       level.time - ent->client->pers.teamChangeTime < 1000 )
 diff --git a/src/game/g_local.h b/src/game/g_local.h
 index 78f9272..c3d3048 100644
 --- a/src/game/g_local.h
