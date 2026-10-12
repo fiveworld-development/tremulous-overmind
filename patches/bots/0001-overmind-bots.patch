@@ -182,10 +182,19 @@ index fcdbfc8..34a8a78 100644
  
    l = l->next = BG_Alloc( sizeof( g_admin_level_t ) );
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
-index f68a52a..ee4f994 100644
+index f68a52a..4fef188 100644
 --- a/src/game/g_bot.c
 +++ b/src/game/g_bot.c
-@@ -80,23 +80,19 @@ qboolean G_BotAdd( char *name, team_t team ) {
+@@ -41,6 +41,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+  * @param name [string] bot's name
+  * @param team [team_t] alien or human
+  */
++static bot_t botPool[ MAX_CLIENTS ];
++
+ qboolean G_BotAdd( char *name, team_t team ) {
+ 	int i;
+ 	int clientNum;
+@@ -80,29 +82,30 @@ qboolean G_BotAdd( char *name, team_t team ) {
          }
      }
  	// find what clientNum to use for bot
@@ -215,7 +224,19 @@ index f68a52a..ee4f994 100644
  		return qfalse;
  	}
  	
-@@ -127,6 +123,7 @@ qboolean G_BotAdd( char *name, team_t team ) {
+ 	ent = &g_entities[ clientNum ];
+ 	ent->inuse = qtrue;
+-	ent->bot = (bot_t *)BG_Alloc( sizeof(bot_t) );
++	// Overmind: one fixed bot_t per slot instead of BG_Alloc. Bot code still touched the
++	// block after G_BotDel freed it, which broke the allocator's free list; the next
++	// BG_DefragmentMemory (map change) then failed with "Memory corruption detected"
++	// and the server came back on its start map instead of rotating.
++	ent->bot = &botPool[ clientNum ];
++	memset( ent->bot, 0, sizeof( bot_t ) );
+ //	ent->bot->path.crumb = BG_Alloc( sizeof(level.paths) );
+ 	
+ 	ent->r.svFlags |= SVF_BOT;
+@@ -127,6 +130,7 @@ qboolean G_BotAdd( char *name, team_t team ) {
      G_BotDebug(ent, BOT_VERB_IMPORTANT, BOT_DEBUG_GENERAL, "Bot Added\n");
  	G_ChangeTeam( ent, team );
  	BotInit( ent );
@@ -223,7 +244,19 @@ index f68a52a..ee4f994 100644
      if(team == TEAM_HUMANS) {
  		BotInitHuman( ent );
  		level.humanBots++;
-@@ -175,71 +172,61 @@ void G_BotAddRandom ( team_t team ) {
+@@ -154,10 +158,7 @@ void G_BotDel( int clientNum ) {
+     G_BotDebug(ent, BOT_VERB_IMPORTANT, BOT_DEBUG_GENERAL, "Bot deleted\n");
+ 	ent->inuse = qfalse;
+ 	ent->r.svFlags = 0;
+-	//BG_Free(ent->bot->path.crumb); 
+-	if(ent->bot) {
+-		BG_Free(ent->bot);
+-	}
++	// the bot_t stays in botPool (see G_BotAdd); late writes land there harmlessly
+     //LEPE:
+     if(ent->client->pers.teamSelection == TEAM_HUMANS && level.humanBots > 0) {
+         level.humanBots--;
+@@ -175,71 +176,61 @@ void G_BotAddRandom ( team_t team ) {
  	char name[MAX_NAME_LENGTH];
  	const char *names[50] = {
  		//------------- ALIENS
@@ -347,7 +380,7 @@ index f68a52a..ee4f994 100644
  	//Do not add more than we can handle
  	if(level.humanBots + level.alienBots < reservedSlots) {
  		do {
-@@ -248,6 +235,43 @@ void G_BotAddRandom ( team_t team ) {
+@@ -248,6 +239,43 @@ void G_BotAddRandom ( team_t team ) {
  		} while(!G_BotAdd(name, team));	
  	}
  }
@@ -391,7 +424,7 @@ index f68a52a..ee4f994 100644
  /**
   * Delete a random bot from a team (the worst score)
   * @param team
-@@ -259,10 +283,11 @@ void G_BotDelRandom ( team_t team ) {
+@@ -259,10 +287,11 @@ void G_BotDelRandom ( team_t team ) {
  	int worst = -1;
  	int worstScore = 9999;
  	
@@ -406,7 +439,7 @@ index f68a52a..ee4f994 100644
  			score = ent->client->ps.persistant[ PERS_SCORE ];
  			if(score < worstScore) {
  				worst = i;
-@@ -270,7 +295,7 @@ void G_BotDelRandom ( team_t team ) {
+@@ -270,7 +299,7 @@ void G_BotDelRandom ( team_t team ) {
  			}
  		}
  	}
@@ -460,7 +493,7 @@ index 5a888c9..27e0f02 100644
  /**
   * Bot will attack to a target
 diff --git a/src/game/g_bot_nav.c b/src/game/g_bot_nav.c
-index 723ef47..99d3f59 100644
+index 723ef47..e7b8096 100644
 --- a/src/game/g_bot_nav.c
 +++ b/src/game/g_bot_nav.c
 @@ -311,7 +311,8 @@ qboolean botAimAtPath( gentity_t *self )
@@ -473,6 +506,25 @@ index 723ef47..99d3f59 100644
  		//don't use lookat on aiming path
  		//self->bot->move.lookat[ PITCH ] = self->client->ps.delta_angles[ PITCH ];
  		//self->bot->move.lookat[ YAW ] = ANGLE2SHORT( angleToTarget[ YAW ] );
+@@ -386,6 +387,18 @@ void setCrumb( gentity_t *self, int closestpath )
+         self->bot->path.numCrumb = nc;
+     }
+     G_BotDebug(self, BOT_VERB_DETAIL, BOT_DEBUG_NAV + BOT_DEBUG_PATH,"Setting crumb : %i to node: %i\n",self->bot->path.numCrumb,closestpath);
++    // Overmind: numCrumb was only bounded by level.numPaths, which can exceed the
++    // history array: the write ran past bot_t into the allocator (map-change crash).
++    // A full history drops its oldest half.
++    {
++        int cap = sizeof( self->bot->path.crumb ) / sizeof( self->bot->path.crumb[ 0 ] );
++        if( self->bot->path.numCrumb >= cap ) {
++            int keep = cap / 2, from = self->bot->path.numCrumb - keep;
++            for( i = 0; i < keep; i++ )
++                self->bot->path.crumb[ i ] = self->bot->path.crumb[ from + i ];
++            self->bot->path.numCrumb = keep;
++        }
++    }
+     self->bot->path.crumb[ self->bot->path.numCrumb ] = closestpath;
+ 	if(self->bot->path.numCrumb < level.numPaths) self->bot->path.numCrumb++;
+     return;
 diff --git a/src/game/g_bot_util.c b/src/game/g_bot_util.c
 index 1bc8b5c..44b2b9d 100644
 --- a/src/game/g_bot_util.c
