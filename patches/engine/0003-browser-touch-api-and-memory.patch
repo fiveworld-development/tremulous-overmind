@@ -1,0 +1,160 @@
+diff --git a/Makefile b/Makefile
+index 6a367ff..c3a76ce 100644
+--- a/Makefile
++++ b/Makefile
+@@ -817,7 +817,7 @@ ifeq ($(PLATFORM),js)
+     -s MODULARIZE=1 \
+     -s INVOKE_RUN=0 \
+     -s EXIT_RUNTIME=0 \
+-    -s EXPORTED_FUNCTIONS="['_main', '_malloc', '_free', '_atof', '_Com_Error', '_Com_ProxyCallback', '_Com_GetCDN', '_Com_GetManifest', '_Z_Malloc', '_Z_Free', '_S_Malloc', '_Cvar_Set', '_Cvar_VariableString', '_VM_GetCurrent', '_VM_SetCurrent']" \
++    -s EXPORTED_FUNCTIONS="['_main', '_malloc', '_free', '_atof', '_Com_Error', '_Com_ProxyCallback', '_Com_GetCDN', '_Com_GetManifest', '_Z_Malloc', '_Z_Free', '_S_Malloc', '_Cvar_Set', '_Cvar_VariableString', '_VM_GetCurrent', '_VM_SetCurrent', '_Overmind_Action', '_Overmind_Look', '_Overmind_Pointer', '_Overmind_State', '_Overmind_Resize', '_Overmind_Command']" \
+     -s EXPORTED_RUNTIME_METHODS="['callMain', 'run', 'allocate', 'UTF8ToString', 'stringToUTF8', 'addFunction']" \
+     -s MIN_WEBGL_VERSION=2 \
+     -s MAX_WEBGL_VERSION=2 \
+@@ -827,8 +827,8 @@ ifeq ($(PLATFORM),js)
+     -s ASSERTIONS=0 \
+     -s GL_ENABLE_GET_PROC_ADDRESS \
+     -s RESERVED_FUNCTION_POINTERS=1 \
+-    -s STACK_SIZE=268435456 \
+-    -s TOTAL_MEMORY=805306368 \
++    -s STACK_SIZE=67108864 \
++    -s TOTAL_MEMORY=335544320 \
+     -s ALLOW_MEMORY_GROWTH=1 \
+     -s EXPORT_NAME=\"tremulous\" \
+     $(OPTIMIZE)
+diff --git a/src/sdl/sdl_input.cpp b/src/sdl/sdl_input.cpp
+index 612d6c2..894c0e2 100644
+--- a/src/sdl/sdl_input.cpp
++++ b/src/sdl/sdl_input.cpp
+@@ -46,10 +46,15 @@ static bool legacyCursorResync = true;
+ 
+ #ifdef __EMSCRIPTEN__
+ #define IN_BROWSER 1
++#include <emscripten.h>
+ #else
+ #define IN_BROWSER 0
+ #endif
+ 
++// Pointer position set by the page's touch layer (Overmind_Pointer); while set it
++// replaces the SDL cursor for menus. A real mouse move hands control back.
++static int touchPointerX = -1, touchPointerY = -1;
++
+ static cvar_t *in_mouse             = NULL;
+ static cvar_t *in_nograb;
+ 
+@@ -1123,6 +1128,8 @@ static void IN_ProcessEvents( void )
+ 				break;
+ 
+ 			case SDL_MOUSEMOTION:
++				if( e.motion.which != SDL_TOUCH_MOUSEID )
++					touchPointerX = touchPointerY = -1;
+ 				if( mouseActive )
+ 				{
+ 					if( !e.motion.xrel && !e.motion.yrel )
+@@ -1260,9 +1267,16 @@ void IN_Frame( void )
+ 	{
+ 		IN_ActivateMouse( );
+ 	}
+-	if( !mouseActive && cls.uiInterface != 2 )
++	if( touchPointerX >= 0 )
+ 	{
++		x = touchPointerX;
++		y = touchPointerY;
++	}
++	else
+ 		SDL_GetMouseState( &x, &y );
++
++	if( !mouseActive && cls.uiInterface != 2 )
++	{
+ 		IN_SetUIMousePosition( x, y );
+ 	}
+ 	else if( !mouseActive && cursorShowing )
+@@ -1272,7 +1286,6 @@ void IN_Frame( void )
+ 		// the top-left corner once, then feeding exact deltas in 640x480 UI space.
+ 		static int uiX = -1, uiY = -1;
+ 		int w = cls.glconfig.vidWidth, h = cls.glconfig.vidHeight;
+-		SDL_GetMouseState( &x, &y );
+ 		if( w > 0 && h > 0 )
+ 		{
+ 			int tx = x * 640 / w;
+@@ -1374,3 +1387,80 @@ void IN_Restart( void )
+ 	IN_ShutdownJoystick( );
+ 	IN_Init( SDL_window );
+ }
++
++
++#ifdef __EMSCRIPTEN__
++/*
++===============
++Browser input API (Tremulous Overmind)
++
++Called by the page's touch layer. Events go straight into the engine queue, so
++touch play needs no fake DOM events and works without pointer lock.
++===============
++*/
++
++// actions the touch layer can press; they go through the normal key bindings
++static const int overmindActionKeys[] = {
++	'w', 's', 'a', 'd',         // 0-3  move forward / back / left / right
++	K_SPACE, 'c',               // 4-5  jump, crouch (aliens: wallwalk)
++	K_MOUSE1, K_MOUSE2,         // 6-7  fire, alt fire
++	K_ENTER, 'r',               // 8-9  use (armoury, evolve, build menu), reload
++	K_MWHEELUP, K_MWHEELDOWN,   // 10-11 previous / next weapon
++	K_TAB, K_ESCAPE,            // 12-13 scores, menu
++	'm', 'b', 'e'               // 14-16 medkit, buy ammo, deconstruct
++};
++
++extern "C" {
++
++EMSCRIPTEN_KEEPALIVE void Overmind_Action( int action, int down )
++{
++	if( action < 0 || action >= (int)ARRAY_LEN( overmindActionKeys ) )
++		return;
++	Com_QueueEvent( Sys_Milliseconds( ), SE_KEY, overmindActionKeys[ action ], down ? true : false, 0, NULL );
++}
++
++// relative look, in mouse counts (sensitivity applies as for a mouse)
++EMSCRIPTEN_KEEPALIVE void Overmind_Look( int dx, int dy )
++{
++	if( dx || dy )
++		Com_QueueEvent( Sys_Milliseconds( ), SE_MOUSE, dx, dy, 0, NULL );
++}
++
++// absolute menu cursor in window pixels (canvas backing size); -1 releases it
++EMSCRIPTEN_KEEPALIVE void Overmind_Pointer( int x, int y )
++{
++	touchPointerX = x;
++	touchPointerY = y;
++}
++
++// bit 0-3: KEYCATCH_* (console, ui, message, cgame); bit 8: in a game
++EMSCRIPTEN_KEEPALIVE int Overmind_State( void )
++{
++	return Key_GetCatcher( ) | ( clc.state == CA_ACTIVE ? 0x100 : 0 );
++}
++
++// new render size after rotation / resize; the video restart waits until the
++// size has settled, like the desktop does while dragging a window border
++EMSCRIPTEN_KEEPALIVE void Overmind_Resize( int width, int height )
++{
++	if( width < 320 || height < 200 )
++		return;
++	if( cls.glconfig.vidWidth == width && cls.glconfig.vidHeight == height )
++		return;
++	Cvar_SetValue( "r_width", width );
++	Cvar_SetValue( "r_height", height );
++	Cvar_SetValue( "r_customwidth", width );
++	Cvar_SetValue( "r_customheight", height );
++	vidRestartTime = Sys_Milliseconds( ) + 600;
++}
++
++EMSCRIPTEN_KEEPALIVE void Overmind_Command( const char *text )
++{
++	if( !text || !*text )
++		return;
++	Cbuf_AddText( text );
++	Cbuf_AddText( "\n" );
++}
++
++}
++#endif
