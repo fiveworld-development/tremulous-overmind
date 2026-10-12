@@ -1,0 +1,15 @@
+diff --git a/Makefile b/Makefile
+index c3a76ce..614b101 100644
+--- a/Makefile
++++ b/Makefile
+@@ -788,7 +788,9 @@ ifeq ($(PLATFORM),js)
+ # debug optimize flags: --closure 0 --minify 0 -g
+ 
+   #OPTIMIZEVM += -O3
+-  OPTIMIZEVM += -O1 #FIXME: Issue https://github.com/justinl1996/tremulous/issues/8
++  # -O2: the -O1 workaround for issue #8 (random signature mismatch on connect) costs
++  # a lot of speed in the QVM interpreter; drop this patch again if #8 shows up
++  OPTIMIZEVM += -O2
+   #OPTIMIZEVM += -O0 -g
+   OPTIMIZE = $(OPTIMIZEVM)
+ 
