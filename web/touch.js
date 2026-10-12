@@ -43,15 +43,15 @@
   var AIM_STEPS = [0.5, 0.6, 0.8, 1, 1.25, 1.5, 2, 2.5];
   var SIZES = { s: 0.85, m: 1, l: 1.18 };
 
-  // look response: linear for normal drags (damping slow drags felt sticky), fast
-  // flicks accelerate; vertical a bit calmer than horizontal
-  var LOOK_GAIN = 2.6;         // mouse counts per CSS pixel at aim 1.0, accel 1.0
-  var ACCEL_FROM = 0.6;        // finger speed (px/ms) where acceleration starts
-  var ACCEL_K = 0.5;           // extra multiplier per px/ms above that
-  var ACCEL_MAX = 2.0;         // cap for flicks
+  // look response: 1:1 for every normal drag, so the same swipe always turns the same
+  // amount (muscle memory); only real flicks get a boost to turn around quickly;
+  // vertical a bit calmer than horizontal
+  var LOOK_GAIN = 2.8;         // mouse counts per CSS pixel at aim 1.0, accel 1.0
+  var ACCEL_FROM = 1.4;        // finger speed (px/ms) where acceleration starts (a flick)
+  var ACCEL_K = 0.4;           // extra multiplier per px/ms above that
+  var ACCEL_MAX = 1.7;         // cap for flicks
   var LOOK_Y = 0.8;            // vertical / horizontal
-  var AIM_FRICTION = 0.6;      // look speed while the crosshair is on an enemy in reach
-  var LOOK_SMOOTH = 0.65;      // share of the pending look movement applied per frame
+  var AIM_FRICTION = 0.8;      // look speed while the crosshair is on an enemy in reach
   // gyro: rotation rate (deg/s) -> mouse counts
   var GYRO_GAIN = 6;           // counts per degree at aim 1.0 (about 1:1 at sensitivity 7)
   var GYRO_DZ = 1.5;           // deg/s deadzone against sensor drift and hand tremor
@@ -492,19 +492,10 @@
     // events): applying each event at once moves the camera in uneven steps. Finger
     // movement is collected and handed to the engine per animation frame instead,
     // mostly in the same frame and the rest in the next one or two.
-    var pendX = 0, pendY = 0, lookRaf = 0;
-    function lookFrame() {
-      lookRaf = 0;
-      var x = pendX * LOOK_SMOOTH, y = pendY * LOOK_SMOOTH;
-      if (Math.abs(pendX) < 1.5 && Math.abs(pendY) < 1.5) { x = pendX; y = pendY; }
-      pendX -= x; pendY -= y;
-      emit(x, y);
-      if (pendX || pendY) lookRaf = requestAnimationFrame(lookFrame);
-    }
-    function look(fx, fy) {
-      pendX += fx; pendY += fy;
-      if (!lookRaf) lookRaf = requestAnimationFrame(lookFrame);
-    }
+    // Straight through: the engine adds up all motion between two of its frames, so
+    // each frame turns exactly as far as the finger moved. (Spreading it over later
+    // frames only added lag, worst at the 20-30 fps of a busy phone.)
+    function look(fx, fy) { emit(fx, fy); }
     function lookTouch(o, t) {
       var tn = now(), dt = Math.max(4, Math.min(64, tn - o.t));
       var dx = t.clientX - o.x, dy = t.clientY - o.y;
