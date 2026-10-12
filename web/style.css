@@ -31,7 +31,7 @@ a:hover { text-decoration-color: var(--ink); }
 /* ---------- first screen = the in-game main menu ---------- */
 .menu-screen {
   position: relative;
-  min-height: 100svh;
+  min-height: 88svh; /* the server list's frame peeks in below: there is more */
   display: grid;
   grid-template: "presented menu" auto "title title" 1fr "credits credits" auto / 1fr auto;
   padding: clamp(1rem, 3vw, 1.75rem) var(--gutter) 1.25rem;
@@ -62,6 +62,22 @@ a:hover { text-decoration-color: var(--ink); }
   /* lift the dim scanline letters; "screen" drops the jpg's dark backdrop */
   mix-blend-mode: screen; filter: brightness(3.2) contrast(1.5) saturate(1.2);
 }
+.cta { margin-top: clamp(1.25rem, 4vh, 2.25rem); display: flex; flex-direction: column; align-items: center; gap: .9rem; }
+.cta-play { width: auto; padding: .85rem 2.6rem; font-size: 1.15rem; }
+.install { font: 500 .8rem/1 var(--menu); letter-spacing: .14em; text-transform: uppercase; color: var(--ink);
+  background: rgba(0,0,0,.45); border: 1px solid var(--line-strong); padding: .55rem 1.1rem; cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); }
+.install:hover { border-color: var(--ink); }
+.install[hidden], .ios-hint[hidden] { display: none; }
+.ios-hint { margin: 0; max-width: 22rem; padding: .7rem .9rem; font: 400 .85rem/1.45 var(--text); color: #c9c9c2;
+  background: rgba(0,0,0,.6); border: 1px solid var(--line-strong); }
+.ios-hint b { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .cue span { animation: none; } }
+.cue { margin-top: .4rem; font: 500 .78rem/1 var(--menu); letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); text-decoration: none; text-shadow: 0 1px 2px #000; }
+.cue:hover { color: var(--ink); }
+.cue span { display: block; margin-top: .3rem; font-size: 1.2rem; animation: cue 1.8s ease-in-out infinite; }
+@keyframes cue { 0%, 100% { transform: translateY(0); opacity: .55; } 50% { transform: translateY(5px); opacity: 1; } }
 .sub { margin: 1.1rem 0 0; font: 400 clamp(0.95rem, 2vw, 1.1rem)/1.5 var(--text); color: #c9c9c2; text-shadow: 0 1px 3px #000; }
 
 .credits { grid-area: credits; margin: 0; text-align: center; font: 400 0.72rem/1.6 var(--menu); color: rgba(233,233,228,.6); letter-spacing: 0.03em; }

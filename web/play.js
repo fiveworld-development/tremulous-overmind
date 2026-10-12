@@ -197,8 +197,37 @@
   refreshStatus();
   setInterval(function () { if (!started) refreshStatus(); }, 15000);
 
-  // ?play=1 / ?play=2 deep links (e.g. from ads or webnova360.com)
-  var deep = new URLSearchParams(location.search).get('play');
-  if (deep === 'menu') start(0); // menu only, no auto-connect (handy for testing)
+  // ---- installable app: service worker, install button, iOS hint
+  var standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(function () {});
+  }
+  var installBtn = document.getElementById('install');
+  var iosHint = document.getElementById('ios-hint');
+  var installPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    installPrompt = e;
+    if (!standalone) installBtn.hidden = false;
+  });
+  window.addEventListener('appinstalled', function () { installBtn.hidden = true; installPrompt = null; });
+  // iPhone/iPad Safari has no install prompt, only Share > Add to Home Screen
+  var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS && !standalone) installBtn.hidden = false;
+  installBtn.addEventListener('click', function () {
+    if (installPrompt) {
+      installPrompt.prompt();
+      installPrompt.userChoice.then(function () { installPrompt = null; installBtn.hidden = true; });
+    } else {
+      iosHint.hidden = !iosHint.hidden;
+    }
+  });
+
+  // ?play=1 / ?play=2 deep links (e.g. from ads or webnova360.com);
+  // the home screen app (?app=1) goes straight into the game
+  var params = new URLSearchParams(location.search);
+  var deep = params.get('play');
+  if (params.get('app') === '1' && standalone) start(1);
+  else if (deep === 'menu') start(0); // menu only, no auto-connect (handy for testing)
   else if (deep) document.querySelector('[data-server="' + (deep === '2' ? 2 : 1) + '"]').focus();
 })();
