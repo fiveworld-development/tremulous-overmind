@@ -219,7 +219,7 @@ index fcdbfc8..34a8a78 100644
  
    l = l->next = BG_Alloc( sizeof( g_admin_level_t ) );
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
-index f68a52a..4fef188 100644
+index f68a52a..f860dd2 100644
 --- a/src/game/g_bot.c
 +++ b/src/game/g_bot.c
 @@ -41,6 +41,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
@@ -438,7 +438,7 @@ index f68a52a..4fef188 100644
 +	}
 +	if( mapStart != level.startTime ) {
 +		mapStart = level.startTime;
-+		base = G_Rand_Range( 2, 7 ); // 2..6: real players should usually out-aim them
++		base = G_Rand_Range( 1, 6 ); // 1..5: real players should usually out-aim them
 +	}
 +	skill = base + G_Rand_Range( -2, 3 ); // -2..+2
 +	if( skill < 1 ) skill = 1;
@@ -563,7 +563,7 @@ index 723ef47..e7b8096 100644
  	if(self->bot->path.numCrumb < level.numPaths) self->bot->path.numCrumb++;
      return;
 diff --git a/src/game/g_bot_util.c b/src/game/g_bot_util.c
-index 1bc8b5c..44b2b9d 100644
+index 1bc8b5c..e02ac62 100644
 --- a/src/game/g_bot_util.c
 +++ b/src/game/g_bot_util.c
 @@ -106,6 +106,34 @@ int botGetAngleToTarget( gentity_t *self, gentity_t *target ) {
@@ -591,31 +591,42 @@ index 1bc8b5c..44b2b9d 100644
 +	self->client->ps.delta_angles[ axis ] = ANGLE2SHORT( current + diff );
 +}
 +/**
-+ * Overmind: aiming turn speed for a bot, 1 (sloppy) .. 10 (sharp): ~195..600 deg/s
++ * Overmind: aiming turn speed for a bot, 1 (sloppy) .. 10 (sharp): ~115..340 deg/s
 + */
 +float botAimTurnSpeed( gentity_t *self ) {
 +	int skill = ( self->bot && self->bot->skill > 0 ) ? self->bot->skill : 5;
-+	return 150.0f + 45.0f * skill;
++	return 90.0f + 25.0f * skill;
 +}
 +
  /*
   * Bot AIM at target
   * Perform calculations on where to shoot / attack
-@@ -135,6 +163,10 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
+@@ -135,19 +163,30 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
  	VectorAdd( targetStraight, targetUp, dirToTarget );
  
  	wobble = (target->s.eType == ET_BUILDABLE ? 0 : BOT_WOBBLE);// + self->bot->var.angleToTarget;
-+	// skill 1..10 scales the aim error from ~1.6x down to ~0.3x the original wobble
-+	if( wobble && self->bot && self->bot->skill > 0 ) {
-+		wobble = wobble * ( 12 - self->bot->skill ) / 7;
-+	}
- 	if(self->client->ps.eFlags & EF_POISONCLOUDED) {
- 		wobble += G_Rand();
- 	}
-@@ -143,11 +175,13 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
+-	if(self->client->ps.eFlags & EF_POISONCLOUDED) {
+-		wobble += G_Rand();
+-	}
+-	dirToTarget[0] += (wobble * sin( self->client->time1000 ));
+-	dirToTarget[1] += (wobble * cos( self->client->time1000 ));
  
  	// Grab the angles to use with delta_angles
  	vectoangles( dirToTarget, angleToTarget );
++
++	// Overmind: aim error as an angle that sways slowly (period ~3 s, own phase per
++	// bot). The original added a few units to the direction vector, which is no error
++	// at all beyond close range: every bot was a perfect shot across the map.
++	// skill 1 ~ 11 deg, 5 ~ 7.5 deg, 10 ~ 3 deg; poison makes it worse.
++	if( wobble ) {
++		int   skill = ( self->bot && self->bot->skill > 0 ) ? self->bot->skill : 5;
++		float err = 3.0f + ( 10 - skill ) * 0.9f;
++		float ph = level.time * 0.0021f + ( self - g_entities ) * 1.7f;
++		if( self->client->ps.eFlags & EF_POISONCLOUDED )
++			err += 4.0f;
++		angleToTarget[ YAW ]   += err * sin( ph );
++		angleToTarget[ PITCH ] += err * 0.6f * cos( ph * 1.3f );
++	}
 +	// Overmind: turn at a skill-dependent speed - snapping in one frame looked robotic
 +	// and made every bot a perfect flick shot
  	if(pitch) {
@@ -898,7 +909,7 @@ index 78f9272..c3d3048 100644
  extern  vmCvar_t  g_bot_debug_verbosity;
  extern  vmCvar_t  g_bot_debug_type;
 diff --git a/src/game/g_main.c b/src/game/g_main.c
-index c4ea3eb..108d51b 100644
+index c4ea3eb..3a6baba 100644
 --- a/src/game/g_main.c
 +++ b/src/game/g_main.c
 @@ -164,6 +164,9 @@ vmCvar_t  g_bot_lcannon;
@@ -921,35 +932,54 @@ index c4ea3eb..108d51b 100644
    { &g_bot_essence, "g_bot_essence", "1", 0, 0, qfalse },
    { &g_bot_tagname, "g_bot_tagname", "1", 0, 0, qfalse },
    { &g_bot_manual, "g_bot_manual", "0", 0, 0, qfalse },
-@@ -374,6 +380,8 @@ Q_EXPORT intptr_t vmMain( int command, int arg0, int arg1, int arg2, int arg3, i
-   {
-     case GAME_INIT:
-       G_InitGame( arg0, arg1, arg2 );
-+      if( !BG_MemoryIntact( ) )
-+        G_Printf( "MEMCHECK: free list broken after G_InitGame\n" );
- 	  trap_SendConsoleCommand( EXEC_APPEND, "exec bots.cfg\n" ); 
-       return 0;
- 
-@@ -1105,8 +1113,10 @@ G_ShutdownGame
+@@ -766,7 +772,11 @@ void G_PathLoad( void )
+ 	path++;
+ 	}
+ 	path = pathorigin; //reset pointer
+-	level.paths = BG_Alloc( numPaths * sizeof(path) );
++	// Overmind: was sizeof(path) - the local char pointer, 4 bytes - so every path
++	// record overflowed the block and wrecked the allocator; the map change then died
++	// in BG_DefragmentMemory and the server came back on its start map. The ids in
++	// path.dat index the array, so size it by the largest id the file may use.
++	level.paths = BG_Alloc( ( numPaths + 1 ) * sizeof( level.paths[ 0 ] ) );
+ 	i = 0;
+ 	while( *path )
+ 	{
+@@ -789,6 +799,13 @@ void G_PathLoad( void )
+ 						&level.paths[level.numPaths].timeout,
+ 						&level.paths[level.numPaths].action 
+ 					); 
++			// sscanf wrote this record at the previous index + 1 (arguments are evaluated
++			// first) and set numPaths to the record's id; keep the next write in bounds
++			if( level.numPaths < 0 || level.numPaths >= numPaths ) {
++				level.numPaths = numPaths - 1;
++				path++;
++				continue;
++			}
+ 			if(level.paths[level.numPaths].timeout <= 0){
+ 				level.paths[level.numPaths].timeout = 10000;
+ 			}
+@@ -798,6 +815,9 @@ void G_PathLoad( void )
+ 		}
+ 	path++;
+ 	}
++	if( level.numPaths > numPaths )
++		level.numPaths = numPaths;
++	BG_Free( pathorigin );   // the text was leaked on every map load
+ 	G_Debug(BOT_VERB_NORMAL, BOT_DEBUG_MAIN + BOT_DEBUG_PATH, "Loaded %d paths\n", level.numPaths);
+ }
+ /*
+@@ -1105,6 +1125,9 @@ G_ShutdownGame
  void G_ShutdownGame( int restart )
  {
    // in case of a map_restart
-+  if( !BG_MemoryIntact( ) ) G_Printf( "MEMCHECK: broken at shutdown start\n" );
++  // Overmind: a broken free list kills the map change in BG_DefragmentMemory; say so
++  if( !BG_MemoryIntact( ) )
++    G_Printf( S_COLOR_RED "MEMCHECK: game memory corrupted before shutdown\n" );
    G_ClearVotes( );
    G_BotDelAll( );
-+  if( !BG_MemoryIntact( ) ) G_Printf( "MEMCHECK: broken after G_BotDelAll\n" );
    G_RestoreCvars( );
- 
-   G_Printf( "==== ShutdownGame ====\n" );
-@@ -1121,6 +1131,7 @@ void G_ShutdownGame( int restart )
- 
-   // write all the client session data so we can get it back
-   G_WriteSessionData( );
-+  if( !BG_MemoryIntact( ) ) G_Printf( "MEMCHECK: broken before G_admin_cleanup\n" );
- 
-   G_admin_cleanup( );
-   G_namelog_cleanup( );
-@@ -2580,6 +2591,11 @@ void G_CheckVote( team_t team )
+@@ -2580,6 +2603,11 @@ void G_CheckVote( team_t team )
      }
    }
  
@@ -961,25 +991,7 @@ index c4ea3eb..108d51b 100644
    if( pass )
      level.voteExecuteTime[ team ] = level.time + level.voteDelay[ team ];
  
-@@ -2771,6 +2787,17 @@ void G_RunFrame( int levelTime )
-     return;
-   }
- 
-+  // Overmind diagnostics: report the first frame that finds the free list broken
-+  {
-+    static int reported;
-+    if( !reported && !BG_MemoryIntact( ) )
-+    {
-+      reported = 1;
-+      G_Printf( "MEMCHECK: free list broken at level time %d (frame %d)\n",
-+        level.time - level.startTime, level.framenum );
-+    }
-+  }
-+
-   //LEPE: control the essence of paths
-   if( level.essenceFadeTimer > 1000 ) {
-         level.essenceFadeTimer = 0;
-@@ -2922,6 +2949,29 @@ void G_RunFrame( int levelTime )
+@@ -2922,6 +2950,29 @@ void G_RunFrame( int levelTime )
    G_CalculateAvgPlayers( );
    G_UpdateZaps( msec );
  
@@ -1009,7 +1021,7 @@ index c4ea3eb..108d51b 100644
    // see if it is time to end the level
    CheckExitRules( );
  
-@@ -2958,8 +3008,27 @@ void G_DeployBots( void )  {
+@@ -2958,8 +3009,27 @@ void G_DeployBots( void )  {
  	int alien_human_diff = alien_players - human_players;
  	int aliens = g_bot_minPerTeam.integer + level.extraAlienBots - (alien_human_diff < 0 ? alien_human_diff : 0);
  	int humans = g_bot_minPerTeam.integer + level.extraHumanBots + (alien_human_diff > 0 ? alien_human_diff : 0);
