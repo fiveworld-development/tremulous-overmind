@@ -55,7 +55,12 @@
       '+set', 'fs_cdn', '"' + location.origin + BASE + 'assets"',
       '+set', 'fs_basepath', 'tremulous_base',
       '+set', 'fs_homepath', 'tremulous_home',
-      '+set', 'cl_allowDownload', '0'
+      '+set', 'cl_allowDownload', '0',
+      // render at the real window size (the engine only reads it at start; later
+      // resizes/rotations are stretched by CSS, see style.css)
+      '+set', 'r_mode', '-1',
+      '+set', 'r_customwidth', String(Math.min(frame.offsetWidth || innerWidth, 2560)),
+      '+set', 'r_customheight', String(Math.min(frame.offsetHeight || innerHeight, 1600))
     ];
     if (server) args.push('+connect', 'overmind-' + server);
 
@@ -80,14 +85,6 @@
     });
   }
 
-  // ---- keep the canvas matched to the window (resize, rotation, fullscreen)
-  var resizeTimer = 0;
-  function fitCanvas() {
-    if (!engine || !engine.canvas || !engine.setCanvasSize) return;
-    if (frame.offsetWidth && frame.offsetHeight) engine.setCanvasSize(frame.offsetWidth, frame.offsetHeight);
-  }
-  window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(fitCanvas, 120); });
-  document.addEventListener('fullscreenchange', function () { setTimeout(fitCanvas, 120); });
 
   // Mouse: menus follow the real cursor (engine patch), in-game the engine takes
   // the pointer lock itself on the first click. Nothing to do here but keep focus.
