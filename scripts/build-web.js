@@ -106,16 +106,28 @@ function main() {
     fs.writeFileSync(path.join(out, 'tremulous.js'), js);
 
     // 3. pages
+    const engineVer = crc32(Buffer.from(js)).toString(36);
     const web = path.join(root, 'web');
     for (const f of fs.readdirSync(web)) {
         const src = path.join(web, f);
         if (fs.statSync(src).isDirectory()) { fs.cpSync(src, path.join(out, f), { recursive: true }); continue; }
         let text = fs.readFileSync(src);
         if (/\.(html|js|css|txt|xml|json|webmanifest)$/.test(f)) {
-            text = text.toString('utf8').replaceAll('%BASE%', base);
+            text = text.toString('utf8').replaceAll('%BASE%', base).replaceAll('%ENGINE_VER%', engineVer);
         }
         fs.writeFileSync(path.join(out, f), text);
     }
+
+    // 4. cache busting: page-referenced css/js get ?v=<crc32 of the built file>
+    const index = path.join(out, 'index.html');
+    const page = fs.readFileSync(index, 'utf8').replace(
+        /((?:href|src)=")([^"?#]+\.(?:css|js))"/g,
+        (m, pre, url) => {
+            if (!url.startsWith(base)) return m;
+            const file = path.join(out, url.slice(base.length));
+            return fs.existsSync(file) ? `${pre}${url}?v=${crc32(fs.readFileSync(file)).toString(36)}"` : m;
+        });
+    fs.writeFileSync(index, page);
 
     console.log(`built ${out}`);
     console.log(`  ${manifest.length} pk3 (${extra.length} added to engine list: ${extra.length ? manifest.filter(e => extra.some(x => x.includes(e.name))).map(e => e.name).join(', ') : '-'})`);

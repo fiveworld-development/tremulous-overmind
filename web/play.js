@@ -31,7 +31,7 @@
     return new Promise(function (resolve, reject) {
       if (window.tremulous) return resolve(window.tremulous);
       var s = document.createElement('script');
-      s.src = BASE + 'tremulous.js';
+      s.src = BASE + 'tremulous.js?v=%ENGINE_VER%';
       s.onload = function () { resolve(window.tremulous); };
       s.onerror = function () { reject(new Error('engine download failed')); };
       document.head.appendChild(s);
