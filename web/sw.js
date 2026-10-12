@@ -27,7 +27,11 @@ self.addEventListener('fetch', function (e) {
   // pages: network first so a deploy shows up right away, cache when offline
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(function (r) {
-      if (r.ok) { var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put(BASE, copy); }); }
+      // only the start page itself becomes the offline page, never another URL under BASE
+      var start = p === '' || p === 'index.html';
+      if (r.ok && start && /^text\/html/.test(r.headers.get('Content-Type') || '')) {
+        var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put(BASE, copy); });
+      }
       return r;
     }).catch(function () { return caches.match(BASE); }));
     return;

@@ -63,7 +63,8 @@
       // no SOCKS relay: each attempt opened an extra websocket that only failed,
       // and they ate the per-IP connection limit (slow or refused server switches)
       '+set', 'net_socksEnabled', '0',
-      '+set', 'name', '"' + playerName() + '"',
+      // no quotes of our own: the engine quotes arguments with spaces itself
+      '+set', 'name', playerName(),
       // network: 40-player snapshots need more than the 25 kB/s default, and 30 input
       // packets a second feel sluggish; frames uncapped for 120 Hz displays
       '+set', 'rate', '90000', '+set', 'snaps', '40', '+set', 'cl_maxpackets', '125',
@@ -287,7 +288,8 @@
     return n;
   }
   function cleanName(s) {
-    return String(s || '').replace(/[^A-Za-z0-9 _.\-\[\]()!?#*+=:]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+    // no '+' (starts a command on the engine command line), no quotes or ';'
+    return String(s || '').replace(/[^A-Za-z0-9 _.\-\[\]()!?#*=:]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
   }
   if (nameInput) {
     nameInput.value = storedName();

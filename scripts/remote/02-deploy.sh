@@ -124,6 +124,13 @@ if ! sudo -n test -f /etc/ssl/tremulous/origin.crt; then
         -subj "/CN=$HOST_NAME" -keyout /etc/ssl/tremulous/origin.key -out /etc/ssl/tremulous/origin.crt 2>/dev/null
     sudo -n chmod 0640 /etc/ssl/tremulous/origin.key
 fi
+# our Worker's shared secret (X-Overmind-Auth); set on the host and in the Worker, never
+# in the repo. Without it the Worker's X-Overmind-Client header is simply not trusted.
+if ! sudo -n test -f /etc/nginx/snippets/tremulous-secret.conf; then
+    echo 'map $http_x_overmind_auth $trem_from_worker { default 0; }' | sudo -n tee /etc/nginx/snippets/tremulous-secret.conf >/dev/null
+    sudo -n chmod 0600 /etc/nginx/snippets/tremulous-secret.conf
+    echo "WARN: no Worker secret yet (/etc/nginx/snippets/tremulous-secret.conf)"
+fi
 sudo -n sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous-headers.conf" | sudo -n tee /etc/nginx/snippets/tremulous-headers.conf >/dev/null
 sudo -n sed "s/__TREM_HOST__/$HOST_NAME/g" "$O/deploy/nginx/tremulous.conf" | sudo -n tee /etc/nginx/sites-available/tremulous >/dev/null
 sudo -n ln -sfn /etc/nginx/sites-available/tremulous /etc/nginx/sites-enabled/tremulous

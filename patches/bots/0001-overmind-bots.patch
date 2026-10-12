@@ -166,6 +166,21 @@ index 160b735..14f9a00 100644
  
    // build the render lists
    if( !cg.hyperspace )
+diff --git a/src/game/g_admin.c b/src/game/g_admin.c
+index fcdbfc8..34a8a78 100644
+--- a/src/game/g_admin.c
++++ b/src/game/g_admin.c
+@@ -659,7 +659,9 @@ static void admin_default_levels( void )
+   l->level = level++;
+   Q_strncpyz( l->name, "^4Unknown Player", sizeof( l->name ) );
+   Q_strncpyz( l->flags,
+-    "listplayers admintest adminhelp time register",
++    // Overmind: no self-registration; guids are client-chosen, so a registered
++    // name proves nothing, and every /register rewrites admin.dat
++    "listplayers admintest adminhelp time",
+     sizeof( l->flags ) );
+ 
+   l = l->next = BG_Alloc( sizeof( g_admin_level_t ) );
 diff --git a/src/game/g_bot.c b/src/game/g_bot.c
 index f68a52a..ee4f994 100644
 --- a/src/game/g_bot.c
@@ -794,7 +809,7 @@ index 78f9272..c3d3048 100644
  extern  vmCvar_t  g_bot_debug_verbosity;
  extern  vmCvar_t  g_bot_debug_type;
 diff --git a/src/game/g_main.c b/src/game/g_main.c
-index c4ea3eb..85db504 100644
+index c4ea3eb..9ef2b7a 100644
 --- a/src/game/g_main.c
 +++ b/src/game/g_main.c
 @@ -164,6 +164,9 @@ vmCvar_t  g_bot_lcannon;
@@ -817,7 +832,19 @@ index c4ea3eb..85db504 100644
    { &g_bot_essence, "g_bot_essence", "1", 0, 0, qfalse },
    { &g_bot_tagname, "g_bot_tagname", "1", 0, 0, qfalse },
    { &g_bot_manual, "g_bot_manual", "0", 0, 0, qfalse },
-@@ -2922,6 +2928,29 @@ void G_RunFrame( int levelTime )
+@@ -2580,6 +2586,11 @@ void G_CheckVote( team_t team )
+     }
+   }
+ 
++  // Overmind: a kick needs a second voice. Bots don't vote, so on a mostly-bot
++  // server the caller's own yes would pass it whenever nobody answers in time.
++  if( pass && level.voteYes[ team ] < 2 && !Q_strncmp( level.voteString[ team ], "ban ", 4 ) )
++    pass = qfalse;
++
+   if( pass )
+     level.voteExecuteTime[ team ] = level.time + level.voteDelay[ team ];
+ 
+@@ -2922,6 +2933,29 @@ void G_RunFrame( int levelTime )
    G_CalculateAvgPlayers( );
    G_UpdateZaps( msec );
  
@@ -847,7 +874,7 @@ index c4ea3eb..85db504 100644
    // see if it is time to end the level
    CheckExitRules( );
  
-@@ -2958,8 +2987,27 @@ void G_DeployBots( void )  {
+@@ -2958,8 +2992,27 @@ void G_DeployBots( void )  {
  	int alien_human_diff = alien_players - human_players;
  	int aliens = g_bot_minPerTeam.integer + level.extraAlienBots - (alien_human_diff < 0 ? alien_human_diff : 0);
  	int humans = g_bot_minPerTeam.integer + level.extraHumanBots + (alien_human_diff > 0 ? alien_human_diff : 0);

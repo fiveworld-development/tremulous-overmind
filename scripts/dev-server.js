@@ -50,4 +50,5 @@ server.on('upgrade', (req, socket, head) => {
     socket.on('error', close);
 });
 
-server.listen(port, () => console.log(`serving ${dir} on http://localhost:${port} (ws -> ${upstream})`));
+// this machine only: it tunnels to the live servers
+server.listen(port, '127.0.0.1', () => console.log(`serving ${dir} on http://localhost:${port} (ws -> ${upstream})`));

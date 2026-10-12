@@ -5,6 +5,7 @@ set -euo pipefail
 cd /   # sudo -u trem cannot stat the caller's home
 B=/opt/tremulous
 ENGINE_REF=00555626cd3e9da2dc9e2b6e608055261e15c21a
+BOTS_REF=e37dadc495350b58e5d8d94a7fb04121fd3e367e   # lepe/trem-gpp-bots, base of patches/bots
 REPO=https://github.com/fiveworld-development/tremulous-overmind
 as_trem() { sudo -n -u trem -H env HOME="$B" "$@"; }
 J="nice -n 15 make -j2"
@@ -18,7 +19,8 @@ as_trem rm -rf "$W"
 as_trem mkdir -p "$W" "$B/build/dist"
 as_trem git clone -q --filter=blob:none https://github.com/justinl1996/tremulous.git "$W/engine"
 as_trem git -C "$W/engine" checkout -q "$ENGINE_REF"
-as_trem git clone -q --depth 1 https://github.com/lepe/trem-gpp-bots.git "$W/bots"
+as_trem git clone -q --filter=blob:none https://github.com/lepe/trem-gpp-bots.git "$W/bots"
+as_trem git -C "$W/bots" checkout -q "$BOTS_REF"
 as_trem git clone -q --depth 1 "$REPO" "$W/overmind"
 for p in $(sudo -n find "$W/overmind/patches/engine" -name '*.patch' | sort); do echo "== $(basename "$p")"; as_trem git -C "$W/engine" apply --whitespace=nowarn "$p"; done
 for p in $(sudo -n find "$W/overmind/patches/bots" -name '*.patch' | sort); do echo "== $(basename "$p")"; as_trem git -C "$W/bots"   apply --whitespace=nowarn "$p"; done

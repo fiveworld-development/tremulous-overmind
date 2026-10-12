@@ -6,7 +6,7 @@ const ORIGIN = 'https://play.webnova360.com';
 const PREFIX = '/play-tremulous';
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === PREFIX) {
       return Response.redirect(url.origin + PREFIX + '/' + url.search, 301);
@@ -21,8 +21,14 @@ export default {
     const upstream = new Request(ORIGIN + url.pathname + url.search, request);
     // Subrequests from a Worker reach the origin with the Worker's own address in
     // CF-Connecting-IP, so every player would share one per-IP limit. Pass the real
-    // client on (always overwritten here, so a visitor cannot set it).
+    // client on (always overwritten here, so a visitor cannot set it). Every customer's
+    // Workers share that egress range, so the origin trusts the header only together
+    // with our secret (Worker secret ORIGIN_SECRET, also on the host, never in the repo).
     upstream.headers.set('X-Overmind-Client', request.headers.get('CF-Connecting-IP') || '');
+    upstream.headers.set('X-Overmind-Auth', (env && env.ORIGIN_SECRET) || '');
+    // the main site's cookies and credentials are none of the game server's business
+    upstream.headers.delete('Cookie');
+    upstream.headers.delete('Authorization');
     if (request.headers.get('Upgrade') === 'websocket') {
       return fetch(upstream);
     }

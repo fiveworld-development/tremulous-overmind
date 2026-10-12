@@ -1,0 +1,123 @@
+diff --git a/src/server/server.h b/src/server/server.h
+index b1b1db1..5b1d4ba 100644
+--- a/src/server/server.h
++++ b/src/server/server.h
+@@ -387,6 +387,7 @@ extern leakyBucket_t outboundLeakyBucket;
+ 
+ bool SVC_RateLimit(leakyBucket_t *bucket, int burst, int period);
+ bool SVC_RateLimitAddress(netadr_t from, int burst, int period);
++bool SV_IsGatewayAddress(netadr_t a);
+ 
+ void SV_FinalMessage(const char *message);
+ void QDECL SV_SendServerCommand(client_t *cl, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+diff --git a/src/server/sv_client.cpp b/src/server/sv_client.cpp
+index fbbd5f6..e51f72a 100644
+--- a/src/server/sv_client.cpp
++++ b/src/server/sv_client.cpp
+@@ -216,6 +216,23 @@ void SV_GetChallenge(netadr_t from)
+ 	}
+ }
+ 
++/*
++==================
++SV_SameConnection
++
++Is a connect from this address a reconnect of that client? Through the
++websocket gateway only the same connection (port) counts: the qport is chosen
++by the client and would let anyone take over another player's slot.
++==================
++*/
++static bool SV_SameConnection( netadr_t from, client_t *cl, int qport )
++{
++	if ( SV_IsGatewayAddress( from ) )
++		return NET_CompareAdr( from, cl->netchan.remoteAddress );
++	return NET_CompareBaseAdr( from, cl->netchan.remoteAddress )
++		&& ( cl->netchan.qport == qport || from.port == cl->netchan.remoteAddress.port );
++}
++
+ /*
+ ==================
+ SV_DirectConnect
+@@ -272,9 +289,7 @@ void SV_DirectConnect( netadr_t from ) {
+ 		if ( cl->state == CS_FREE ) {
+ 			continue;
+ 		}
+-		if ( NET_CompareBaseAdr( from, cl->netchan.remoteAddress )
+-			&& ( cl->netchan.qport == qport 
+-			|| from.port == cl->netchan.remoteAddress.port ) ) {
++		if ( SV_SameConnection( from, cl, qport ) ) {
+ 			if (( svs.time - cl->lastConnectTime) 
+ 				< (sv_reconnectlimit->integer * 1000)) {
+ 				Com_DPrintf ("%s:reconnect rejected : too soon\n", NET_AdrToString (from));
+@@ -285,8 +300,16 @@ void SV_DirectConnect( netadr_t from ) {
+ 	}
+ 	
+ 	// don't let "ip" overflow userinfo string
++	char gatewayIp[ 24 ];
+ 	if ( NET_IsLocalAddress (from) )
+ 		ip = "localhost";
++	else if ( SV_IsGatewayAddress( from ) ) {
++		// one address per gateway connection, so bans and kick votes hit
++		// only that player and not everyone behind the gateway
++		Com_sprintf( gatewayIp, sizeof( gatewayIp ), "127.%d.%d.1",
++			( from.port >> 8 ) & 0xff, from.port & 0xff );
++		ip = gatewayIp;
++	}
+ 	else
+ 		ip = (char *)NET_AdrToString( from );
+ 	if( ( strlen( ip ) + strlen( userinfo ) + 4 ) >= MAX_INFO_STRING ) {
+@@ -385,8 +408,7 @@ void SV_DirectConnect( netadr_t from ) {
+ 		if ( cl->state == CS_FREE )
+ 			continue;
+ 
+-		if ( NET_CompareBaseAdr(from, cl->netchan.remoteAddress)
+-			&& (cl->netchan.qport == qport || from.port == cl->netchan.remoteAddress.port) )
++		if ( SV_SameConnection( from, cl, qport ) )
+         {
+ 			Com_Printf ("%s:reconnect\n", NET_AdrToString (from));
+ 			newcl = cl;
+diff --git a/src/server/sv_main.cpp b/src/server/sv_main.cpp
+index f0788d3..95d6afa 100644
+--- a/src/server/sv_main.cpp
++++ b/src/server/sv_main.cpp
+@@ -554,8 +554,27 @@ SVC_RateLimitAddress
+ Rate limit for a particular address
+ ================
+ */
++/*
++================
++SV_IsGatewayAddress
++
++Overmind: every player comes in through the local websocket gateway, so all of
++them share 127.0.0.1. The gateway opens one UDP socket per connection, so the
++source port is what tells players apart (the qport is chosen by the client).
++================
++*/
++bool SV_IsGatewayAddress( netadr_t a )
++{
++	return a.type == NA_IP && a.ip[0] == 127;
++}
++
+ bool SVC_RateLimitAddress( netadr_t from, int burst, int period )
+ {
++	// one bucket per gateway connection instead of one shared by every player
++	if ( SV_IsGatewayAddress( from ) ) {
++		from.ip[1] = ( from.port >> 8 ) & 0xff;
++		from.ip[2] = from.port & 0xff;
++	}
+ 	leakyBucket_t *bucket = SVC_BucketForAddress( from, burst, period );
+ 	return SVC_RateLimit( bucket, burst, period );
+ }
+@@ -999,6 +1018,12 @@ void SV_PacketEvent( netadr_t from, msg_t *msg ) {
+ 			continue;
+ 		}
+ 
++		// gateway connections keep their port: a packet from another port is
++		// another player guessing this qport, never a translated port
++		if (SV_IsGatewayAddress(from) && cl->netchan.remoteAddress.port != from.port) {
++			continue;
++		}
++
+ 		// the IP port can't be used to differentiate them, because
+ 		// some address translating routers periodically change UDP
+ 		// port assignments
