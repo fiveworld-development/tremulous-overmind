@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes status.json for the landing page: map and human player count per server.
+"""Writes status.json for the landing page: map and player count per server.
 
 Queries each local server with the standard "getstatus" out-of-band packet and
 writes the result atomically into the web root. Runs from a systemd timer.
@@ -11,11 +11,12 @@ import sys
 import tempfile
 
 # tremded binds port..port+2 (one socket per protocol), so instances sit 10 apart
-SERVERS = {"1": 30710, "2": 30720}
+# value: (port, match size = 2 x g_bot_fillTeam); sv_maxclients also counts the bot slots
+SERVERS = {"1": (30710, 40), "2": (30720, 20)}
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/opt/tremulous/web/status.json"
 
 
-def query(port):
+def query(port, size):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.settimeout(1.0)
         s.sendto(b"\xff\xff\xff\xffgetstatus\n", ("127.0.0.1", port))
@@ -31,15 +32,16 @@ def query(port):
         "map": info.get("mapname", "?"),
         "humans": humans,
         "bots": len(players) - humans,
-        "max": int(info.get("sv_maxclients", 0) or 0),
+        "players": len(players),
+        "max": size,
     }
 
 
 def main():
     status = {}
-    for key, port in SERVERS.items():
+    for key, (port, size) in SERVERS.items():
         try:
-            status[key] = query(port)
+            status[key] = query(port, size)
         except (OSError, IndexError, ValueError):
             status[key] = {"online": False}
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(OUT), prefix=".status-")

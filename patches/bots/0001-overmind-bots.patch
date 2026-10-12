@@ -1,0 +1,332 @@
+diff --git a/src/game/g_bot.c b/src/game/g_bot.c
+index f68a52a..f4f0f67 100644
+--- a/src/game/g_bot.c
++++ b/src/game/g_bot.c
+@@ -80,23 +80,19 @@ qboolean G_BotAdd( char *name, team_t team ) {
+         }
+     }
+ 	// find what clientNum to use for bot
+-	// LEPE: clientNum calculation was modified to prevent player hijacking
+-        // We will assign slots from maxclients - 1 to maxclients - reservedSlots - 1
++	// The engine reserves slots 0 .. sv_privateClients-1 for clients that send
++	// sv_privatePassword (nobody, it stays empty), so bots live there and a
++	// connecting player can never be handed a bot's slot.
+ 	clientNum = -1;
+-	for( i = level.maxclients - 1; i > level.maxclients - reservedSlots - 1; i-- ) {
+-		if( !g_entities[i].inuse ) {
++	for( i = 0; i < reservedSlots && i < level.maxclients; i++ ) {
++		if( !g_entities[i].inuse && level.clients[i].pers.connected == CON_DISCONNECTED ) {
+ 			clientNum = i;
+ 			break;
+ 		}
+ 	}
+ 	if(clientNum == -1)
+ 	{
+-		trap_Print("Error: Bots were not assigned correctly\n"); //LEPE
+-		return qfalse;
+-	}
+-	if(clientNum < level.maxclients - reservedSlots - 1) 
+-	{
+-		trap_Print("no more slots for bot\n");
++		trap_Print("no more slots for bot (raise sv_privateClients)\n");
+ 		return qfalse;
+ 	}
+ 	
+@@ -127,6 +123,7 @@ qboolean G_BotAdd( char *name, team_t team ) {
+     G_BotDebug(ent, BOT_VERB_IMPORTANT, BOT_DEBUG_GENERAL, "Bot Added\n");
+ 	G_ChangeTeam( ent, team );
+ 	BotInit( ent );
++	ent->bot->skill = G_BotPickSkill( );
+     if(team == TEAM_HUMANS) {
+ 		BotInitHuman( ent );
+ 		level.humanBots++;
+@@ -175,71 +172,61 @@ void G_BotAddRandom ( team_t team ) {
+ 	char name[MAX_NAME_LENGTH];
+ 	const char *names[50] = {
+ 		//------------- ALIENS
+-		"Fringe", 
+-		"Kesh", 
+-		"Ditto", 
+-		"MonsterPocket", 
+-		"Chiaka", 
+-		
+-		"Shinsho", 
+-		"Watto", 
+-		"Worf", 
+-		"Klaatu", 
+-		"LordNibbler", 
+-		
+-		"Tarantula", 
+-		"URTasty", 
+-		"BlackWidow", 
+-		"MoonWalker", 
+-		"BaByBoom", 
+-		
+-		"Mufasa", 
+-		"Armadillo", 
+-		"FreakMonkey", 
+-		"GotMilk", 
+-		"DaKilla", 
+-		
+-		"FunkyChicken", 
+-		"WantMore", 
+-		"Pringles", 
+-		"Godzilla", 
+-		"KissMyAxe", 
+-		
+-		//------------ HUMANS 
+-		
+-		"Quorra", 
+-		"RandomClu", 
+-		"C-Tron", 
+-		"Erroronous", 
+-		"SegFault", 
+-		
+-		"HeartBleed", 
+-		"Tenshion", 
+-		"2-OP-4U", 
+-		"UrMamma", 
+-		"DiePanzerkraft", 
+-		
+-		"Johnny5", 
+-		"NorthPark", 
+-		"Hallucinogen", 
+-		"HateMe", 
+-		"ManiacPsycho", 
+-		
+-		"CoreDump", 
+-		"AfroHead", 
+-		"FuzzyLogic", 
+-		"SexyChick", 
+-		"IOU-Sucka", 
+-		
+-		"TeamKiller", 
+-		"Messiah", 
+-		"ZeroSystem", 
+-		"CltrAltDel", 
+-		"OptimusPrime", 
++		"Fringe",
++		"Kesh",
++		"Ditto",
++		"Chiaka",
++		"Shinsho",
++		"Watto",
++		"Klaatu",
++		"Tarantula",
++		"BlackWidow",
++		"MoonWalker",
++		"Mufasa",
++		"Armadillo",
++		"Godzilla",
++		"Nyx",
++		"Vesper",
++		"Scuttle",
++		"Hivemind",
++		"Spore",
++		"Talon",
++		"Wraith",
++		"Chitin",
++		"Mandible",
++		"Rift",
++		"Venom",
++		"Grimclaw",
++		//------------ HUMANS
++		"Quorra",
++		"C-Tron",
++		"SegFault",
++		"Tenshion",
++		"Johnny5",
++		"NorthPark",
++		"CoreDump",
++		"FuzzyLogic",
++		"ZeroSystem",
++		"OptimusPrime",
++		"Halcyon",
++		"Kestrel",
++		"Ironside",
++		"Vector",
++		"Bishop",
++		"Ripley",
++		"Hicks",
++		"Vasquez",
++		"Sentinel",
++		"Maverick",
++		"Oxide",
++		"Torque",
++		"Kepler",
++		"Nomad",
++		"Rook",
+ 	};
+ 	int reservedSlots = trap_Cvar_VariableIntegerValue( "sv_privateclients" );
+ 	ini = team == TEAM_ALIENS ? 0 : 25;
+-	fin = team == TEAM_ALIENS ? 26 : 49;
++	fin = team == TEAM_ALIENS ? 25 : 50; // G_Rand_Range() excludes the end
+ 	//Do not add more than we can handle
+ 	if(level.humanBots + level.alienBots < reservedSlots) {
+ 		do {
+@@ -248,6 +235,43 @@ void G_BotAddRandom ( team_t team ) {
+ 		} while(!G_BotAdd(name, team));	
+ 	}
+ }
++/**
++ * Skill for a new bot, 1 (sloppy) .. 10 (sharp).
++ * g_bot_skill 1-10 pins every bot to that value. 0 (default) rolls a base skill
++ * per map and spreads each bot +-2 around it, so one round feels like a casual
++ * lobby and the next like a sweaty one, and no two bots play quite alike.
++ * @return int
++ */
++int G_BotPickSkill( void ) {
++	static int mapStart = -1;
++	static int base = 5;
++	int skill;
++
++	if( g_bot_skill.integer >= 1 && g_bot_skill.integer <= 10 ) {
++		return g_bot_skill.integer;
++	}
++	if( mapStart != level.startTime ) {
++		mapStart = level.startTime;
++		base = G_Rand_Range( 3, 9 ); // 3..8
++	}
++	skill = base + G_Rand_Range( -2, 3 ); // -2..+2
++	if( skill < 1 ) skill = 1;
++	if( skill > 10 ) skill = 10;
++	return skill;
++}
++/**
++ * Real (non-bot) players that are connected or connecting
++ * @return int
++ */
++int G_HumanClients( void ) {
++	int i, n = 0;
++	for( i = 0; i < level.maxclients; i++ ) {
++		if( level.clients[ i ].pers.connected != CON_DISCONNECTED && !( g_entities[ i ].r.svFlags & SVF_BOT ) ) {
++			n++;
++		}
++	}
++	return n;
++}
+ /**
+  * Delete a random bot from a team (the worst score)
+  * @param team
+diff --git a/src/game/g_bot.h b/src/game/g_bot.h
+index 2e09378..3d420d1 100644
+--- a/src/game/g_bot.h
++++ b/src/game/g_bot.h
+@@ -188,6 +188,7 @@ typedef struct
+   gentity_t		*Struct; //used for repairing or healing
+   botState		state;
+   qboolean		debug; 	//debug this bot
++  int			skill;	//1 (sloppy) .. 10 (sharp), see G_BotPickSkill()
+   //THINK: variables used to decide per thinking level
+   struct {
+ 	  botState 		state[THINK_LEVEL_MAX + 1];
+@@ -310,6 +311,8 @@ void G_BotDel( int clientNum );
+ void G_BotReload( gentity_t *ent, int clientNum );
+ void G_BotCmd( int clientNum, char *command, int value, int value2 );
+ void G_BotAddRandom ( team_t team );
++int G_BotPickSkill( void );
++int G_HumanClients( void );
+ void G_BotDelRandom ( team_t team );
+ 
+ // g_bot_nav.c
+diff --git a/src/game/g_bot_util.c b/src/game/g_bot_util.c
+index 1bc8b5c..16dba83 100644
+--- a/src/game/g_bot_util.c
++++ b/src/game/g_bot_util.c
+@@ -135,6 +135,10 @@ qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch ) {
+ 	VectorAdd( targetStraight, targetUp, dirToTarget );
+ 
+ 	wobble = (target->s.eType == ET_BUILDABLE ? 0 : BOT_WOBBLE);// + self->bot->var.angleToTarget;
++	// skill 1..10 scales the aim error from ~1.6x down to ~0.3x the original wobble
++	if( wobble && self->bot && self->bot->skill > 0 ) {
++		wobble = wobble * ( 12 - self->bot->skill ) / 7;
++	}
+ 	if(self->client->ps.eFlags & EF_POISONCLOUDED) {
+ 		wobble += G_Rand();
+ 	}
+diff --git a/src/game/g_local.h b/src/game/g_local.h
+index 78f9272..523c17f 100644
+--- a/src/game/g_local.h
++++ b/src/game/g_local.h
+@@ -1254,6 +1254,8 @@ extern  vmCvar_t  g_bot_step_aim;  //bots aim is not instant (experimental)
+ extern  vmCvar_t  g_bot_skins;  //enable skins for bots :)
+ extern  vmCvar_t  g_bot_join;  //disable bots join
+ extern  vmCvar_t  g_bot_minPerTeam;  //minimum bots per team
++extern  vmCvar_t  g_bot_fillTeam;  //N vs N look with one open seat (0 = off)
++extern  vmCvar_t  g_bot_skill;  //0 = random per map, 1..10 = fixed
+ 
+ extern  vmCvar_t  g_bot_debug_verbosity;
+ extern  vmCvar_t  g_bot_debug_type;
+diff --git a/src/game/g_main.c b/src/game/g_main.c
+index c4ea3eb..e47bc52 100644
+--- a/src/game/g_main.c
++++ b/src/game/g_main.c
+@@ -164,6 +164,8 @@ vmCvar_t  g_bot_lcannon;
+ //LEPE:(add also in g_local.h)
+ 
+ vmCvar_t  g_bot_minPerTeam;
++vmCvar_t  g_bot_fillTeam;
++vmCvar_t  g_bot_skill;
+ vmCvar_t  g_bot_join;
+ vmCvar_t  g_bot_basi;
+ vmCvar_t  g_bot_advbasi;
+@@ -252,6 +254,8 @@ static cvarTable_t   gameCvarTable[ ] =
+   { &g_bot_tyrant, "g_bot_tyrant", "1", 0, 0, qfalse },
+   { &g_bot_join, "g_bot_join", "1", 0, 0, qfalse },
+   { &g_bot_minPerTeam, "g_bot_minPerTeam", "2", CVAR_ARCHIVE, 0, qfalse },
++  { &g_bot_fillTeam, "g_bot_fillTeam", "0", CVAR_ARCHIVE, 0, qfalse },
++  { &g_bot_skill, "g_bot_skill", "0", CVAR_ARCHIVE, 0, qfalse },
+   { &g_bot_essence, "g_bot_essence", "1", 0, 0, qfalse },
+   { &g_bot_tagname, "g_bot_tagname", "1", 0, 0, qfalse },
+   { &g_bot_manual, "g_bot_manual", "0", 0, 0, qfalse },
+@@ -2922,6 +2926,20 @@ void G_RunFrame( int levelTime )
+   G_CalculateAvgPlayers( );
+   G_UpdateZaps( msec );
+ 
++  // keep the bot population right: map start, joins, leaves, team changes
++  {
++    static int lastDeploy = 0;
++    if( level.time < lastDeploy )
++      lastDeploy = 0; // new map
++    if( g_bot.integer && g_bot_join.integer && g_bot_fillTeam.integer > 0 &&
++        !level.intermissiontime && level.time - level.startTime > 3000 &&
++        level.time - lastDeploy >= 3000 )
++    {
++      lastDeploy = level.time;
++      G_DeployBots( );
++    }
++  }
++
+   // see if it is time to end the level
+   CheckExitRules( );
+ 
+@@ -2958,8 +2976,27 @@ void G_DeployBots( void )  {
+ 	int alien_human_diff = alien_players - human_players;
+ 	int aliens = g_bot_minPerTeam.integer + level.extraAlienBots - (alien_human_diff < 0 ? alien_human_diff : 0);
+ 	int humans = g_bot_minPerTeam.integer + level.extraHumanBots + (alien_human_diff > 0 ? alien_human_diff : 0);
+-	int aliens_add_rm = aliens - level.alienBots;
+-	int humans_add_rm = humans - level.humanBots;
++	int aliens_add_rm, humans_add_rm;
++
++	// g_bot_fillTeam N: the server always looks like an N vs N match with exactly one
++	// seat open. Teams are topped up to N with bots, but bots plus real players (in a
++	// team or spectating) never exceed 2N-1, so whoever connects next finds a seat and
++	// a bot makes room as they join a team.
++	if( g_bot_fillTeam.integer > 0 ) {
++		int seats = 2 * g_bot_fillTeam.integer - 1 - G_HumanClients( );
++		int shortSide = ( level.startTime / 1000 ) & 1; // which team gets the open seat, fixed per map
++		aliens = g_bot_fillTeam.integer - alien_players;
++		humans = g_bot_fillTeam.integer - human_players;
++		if( aliens < 0 ) aliens = 0;
++		if( humans < 0 ) humans = 0;
++		if( seats < 0 ) seats = 0;
++		while( aliens + humans > seats ) {
++			if( aliens > humans || ( aliens == humans && shortSide ) ) aliens--;
++			else humans--;
++		}
++	}
++	aliens_add_rm = aliens - level.alienBots;
++	humans_add_rm = humans - level.humanBots;
+ 	
+     G_Debug(BOT_VERB_DETAIL, BOT_DEBUG_MAIN,"A Players: %d\nH Players: %d\n",alien_players,human_players);
+ 	

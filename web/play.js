@@ -123,7 +123,7 @@
           var id = el.getAttribute('data-status');
           var info = s && s[id];
           if (!info) return;
-          el.textContent = info.online ? info.humans + ' / ' + info.max + (info.bots ? '  +' + info.bots + ' bots' : '') : 'offline';
+          el.textContent = info.online ? (info.players != null ? info.players : info.humans) + ' / ' + info.max : 'offline';
           el.classList.toggle('on', !!info.online);
           if (info.online && info.map) {
             document.querySelector('[data-mapname="' + id + '"]').textContent = info.map;
