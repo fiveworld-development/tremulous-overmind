@@ -57,6 +57,7 @@
     progress(8, 'Loading engine…');
 
     var size = renderSize();
+    renderSizeAtStart = size;
     var args = [
       // quoted: the engine's command parser treats a bare "//" as a comment
       '+set', 'fs_cdn', '"' + location.origin + BASE + 'assets"',
@@ -68,6 +69,9 @@
       // packets a second feel sluggish; frames uncapped for 120 Hz displays
       '+set', 'rate', '90000', '+set', 'snaps', '40', '+set', 'cl_maxpackets', '125',
       '+set', 'com_maxfps', '0',
+      // the page owns fullscreen: an engine-side fullscreen window leaves and re-enters
+      // browser fullscreen on every vid_restart, which loops with resize handling
+      '+set', 'r_fullscreen', '0',
       // render at the play area's size; later resizes go through Overmind_Resize
       '+set', 'r_mode', '-1',
       '+set', 'r_width', String(size[0]), '+set', 'r_height', String(size[1]),
@@ -129,15 +133,25 @@
   }
 
   // follow window resizes, rotation and fullscreen changes once they settle
-  var resizeTimer = 0;
+  // Each resize restarts the renderer, so only real, settled size changes count:
+  // same size or tiny jitter (mobile URL bars, scrollbars) is ignored, and a
+  // restart is never followed by another one within 2.5 s.
+  var resizeTimer = 0, applied = null, lastRestart = 0;
   function onResize() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function () {
       if (!engineModule || !engineModule._Overmind_Resize || game.hidden) return;
       var s = renderSize();
+      if (!applied) applied = renderSizeAtStart;
+      if (applied && Math.abs(s[0] - applied[0]) < 24 && Math.abs(s[1] - applied[1]) < 24) return;
+      var wait = lastRestart + 2500 - Date.now();
+      if (wait > 0) { resizeTimer = setTimeout(onResize, wait); return; }
+      applied = s;
+      lastRestart = Date.now();
       engineModule._Overmind_Resize(s[0], s[1]);
-    }, 400);
+    }, 500);
   }
+  var renderSizeAtStart = null;
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', onResize);
   document.addEventListener('fullscreenchange', onResize);
