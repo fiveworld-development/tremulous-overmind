@@ -110,7 +110,7 @@ sudo -n systemctl reload nginx
 echo "== health"
 sleep 3
 systemctl --no-pager --lines=0 status "tremulous-server@1" "tremulous-server@2" "tremulous-gateway@1" "tremulous-gateway@2" | grep -E '●|Active:'
-sudo -n -u trem python3 "$B/bin/tremulous-status.py" /dev/stdout || true
+sudo -n systemctl start tremulous-status.service; sudo -n cat "$B/web/status.json"
 echo
 curl -sk -o /dev/null -w 'page %{http_code}\n' --resolve "$HOST_NAME:443:127.0.0.1" "https://$HOST_NAME/play-tremulous/"
 echo "deployed $SHA"
