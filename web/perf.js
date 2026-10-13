@@ -23,8 +23,13 @@
   var G = window.WebGL2RenderingContext && WebGL2RenderingContext.prototype;
   hook(G, 'drawElements', function () { cur.draws++; });
   hook(G, 'drawArrays', function () { cur.draws++; });
-  hook(G, 'bufferData', function (t, d) { cur.bufs++; cur.bufBytes += d && d.byteLength ? d.byteLength : (typeof d === 'number' ? d : 0); });
-  hook(G, 'bufferSubData', function (t, o, d) { cur.bufs++; cur.bufBytes += d && d.byteLength ? d.byteLength : 0; });
+  // emscripten uses the WebGL2 overloads (whole heap + offset + length): count the length
+  hook(G, 'bufferData', function (t, d, u, off, len) {
+    cur.bufs++; cur.bufBytes += typeof d === 'number' ? d : len !== undefined ? len : d && d.byteLength || 0;
+  });
+  hook(G, 'bufferSubData', function (t, o, d, off, len) {
+    cur.bufs++; cur.bufBytes += len !== undefined ? len : d && d.byteLength || 0;
+  });
   hook(G, 'texImage2D', function () { cur.tex++; });
   hook(G, 'texSubImage2D', function () { cur.tex++; });
   hook(G, 'linkProgram', function () { cur.prog++; });
