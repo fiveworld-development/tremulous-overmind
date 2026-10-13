@@ -1,0 +1,11 @@
+# Game servers and their websocket gateways. CPUWeight only counts against siblings, so
+# it has to sit here, next to system.slice: inside system-tremulous\x2dserver.slice the
+# servers' own weight only competed with each other, and the shared host's PostgreSQL
+# and PHP jobs got as much CPU as the games during fights.
+[Unit]
+Description=Tremulous game servers
+Before=slices.target
+
+[Slice]
+CPUWeight=1000
+IOWeight=500

@@ -59,6 +59,9 @@
   // floating stick
   var STICK_R = 56, DEAD = 0.3;
   var SPRINT_PUSH = 0.95, SPRINT_HOLD_MS = 300, SPRINT_DROP = 0.6, DOUBLE_TAP_MS = 300;
+  // soft buttons: a touch that slides further than this is aiming, not a tap; a thumb
+  // resting longer than this before lifting was resting, not tapping
+  var SOFT_SLOP = 12, SOFT_MAX_MS = 450;
 
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
@@ -118,22 +121,28 @@
           '<rect x="9.5" y="6.5" width="2.5" height="3" fill="#000"/><rect x="5.5" y="10.5" width="2.5" height="3" fill="#000"/></svg>' +
         '</button>' +
       '</div>' +
+      // Right thumb. Combat buttons (fire, alt, jump, third attack) act the moment they
+      // are touched and keep aiming while the thumb slides. Every other button is "soft":
+      // it only acts on a clean tap, so a thumb that lands on it to aim just aims. Gaps
+      // between buttons belong to the look zone (the containers let touches through).
       '<div class="t-pad">' +
         '<button class="t-fire" data-hold="' + A.FIRE + '" data-look="1" aria-label="Fire">Fire</button>' +
         '<button class="t-alt" data-hold="' + A.ALT + '" data-look="1" aria-label="Alt fire">Alt</button>' +
-        '<button class="t-jump" data-hold="' + A.JUMP + '" aria-label="Jump">Jump</button>' +
+        '<button class="t-jump" data-hold="' + A.JUMP + '" data-look="1" aria-label="Jump">Jump</button>' +
         // a toggle: holding it while moving and aiming would need a third thumb
-        '<button class="t-crouch" data-toggle="' + A.CROUCH + '" aria-label="Crouch">Duck</button>' +
-        '<button class="t-use" data-cmd="use" aria-label="Use, evolve, build">Use</button>' +
-        '<button class="t-reload" data-tap="' + A.RELOAD + '" aria-label="Reload">Rld</button>' +
-        '<button class="t-weap" data-tap="' + A.NEXT + '" aria-label="Next weapon">Wpn</button>' +
-        // contextual: shown from the player's class and inventory (poll)
-        '<div class="t-ctx">' +
+        '<button class="t-crouch" data-toggle="' + A.CROUCH + '" data-soft="1" aria-label="Crouch">Duck</button>' +
+        '<button class="t-reload" data-tap="' + A.RELOAD + '" data-soft="1" aria-label="Reload">Rld</button>' +
+        // aliens never reload: their third attack takes that spot
+        '<button class="t-third" data-ctx="third" data-hold="' + A.USE + '" data-look="1" aria-label="Third attack" hidden>3rd</button>' +
+        // rail on the right edge, above the cluster: everything that isn't combat
+        '<div class="t-rail">' +
+          '<button class="t-use" data-cmd="use" data-soft="1" aria-label="Use, evolve, build">Use</button>' +
+          '<button class="t-weap" data-tap="' + A.NEXT + '" data-soft="1" aria-label="Next weapon">Wpn</button>' +
+          // contextual: shown from the player's class and inventory (poll)
           '<button data-ctx="build" data-ui="build" aria-label="Build menu" hidden>Build</button>' +
-          '<button data-ctx="third" data-hold="' + A.USE + '" aria-label="Third attack" hidden>3rd</button>' +
-          '<button data-ctx="decon" data-tap="' + A.DECON + '" aria-label="Deconstruct" hidden>Decon</button>' +
-          '<button data-ctx="gren" data-cmd="gren" aria-label="Throw grenade" hidden>Gren</button>' +
-          '<button data-ctx="jet" data-cmd="jet" aria-label="Jetpack on or off" hidden>Jet</button>' +
+          '<button data-ctx="decon" data-tap="' + A.DECON + '" data-soft="1" aria-label="Deconstruct" hidden>Decon</button>' +
+          '<button data-ctx="gren" data-cmd="gren" data-soft="1" aria-label="Throw grenade" hidden>Gren</button>' +
+          '<button data-ctx="jet" data-cmd="jet" data-soft="1" aria-label="Jetpack on or off" hidden>Jet</button>' +
         '</div>' +
       '</div>' +
       '<div class="t-hint" hidden></div>' +
@@ -407,7 +416,8 @@
       setBtn(ctx.third, al && al.third || '3rd', !!(al && al.third));
       setBtn(pad.crouch, al ? 'Wall' : 'Duck', human || !!(al && al.wall));
       setBtn(pad.use, al ? 'Evolve' : 'Use', !!st);
-      setBtn(pad.reload, 'Rld', human);
+      // blaster (9), painsaw (11) and the construction kit have nothing to reload
+      setBtn(pad.reload, 'Rld', human && st.weap !== 9 && st.weap !== 11 && st.weap !== WP_HBUILD);
       setBtn(pad.weap, 'Wpn', human);
       ctx.jet.classList.toggle('on', !!st && st.pm === PM_JETPACK);
       // running votes: everyone's, then the own team's
@@ -619,6 +629,20 @@
       if (sprinting && (push < SPRINT_DROP || ny > -0.3)) setSprint(false);
     }
 
+    // what a soft button does once its tap is confirmed
+    function softAction(el) {
+      if (el.hasAttribute('data-toggle')) {
+        var ta = +el.getAttribute('data-toggle');
+        act(ta, !pressed[ta]);
+        el.classList.toggle('on', !!pressed[ta]);
+      } else {
+        if (el.hasAttribute('data-cmd')) runCmd(el.getAttribute('data-cmd'));
+        else if (el.hasAttribute('data-tap')) tap(+el.getAttribute('data-tap'));
+        el.classList.add('down'); setTimeout(function () { el.classList.remove('down'); }, 120);
+      }
+      buzz(8);
+    }
+
     // the chat form is a normal page form: native focus, keyboard and button clicks
     function inChat(e) { return e.target && e.target.closest && !!e.target.closest('.t-chat'); }
 
@@ -653,6 +677,13 @@
         if (el.hasAttribute('data-ui')) {
           el.classList.add('down');
           touches[id] = { kind: 'ui', el: el };
+          continue;
+        }
+        // soft button: decided on release - a tap acts, a drag was aiming all along
+        if (el.hasAttribute('data-soft')) {
+          el.classList.add('down');
+          touches[id] = { kind: 'soft', el: el, x0: t.clientX, y0: t.clientY, t0: now(), moved: false,
+                          x: t.clientX, y: t.clientY, t: now(), v: 0 };
           continue;
         }
         // every button in the right thumb cluster keeps aiming when the thumb slides on
@@ -702,6 +733,13 @@
         if (!o) continue;
         if (o.kind === 'menu') { var p = canvasPoint(t); M._Overmind_Pointer(p[0], p[1]); }
         else if (o.kind === 'move') updateStick(o, t);
+        else if (o.kind === 'soft') {
+          if (!o.moved && Math.hypot(t.clientX - o.x0, t.clientY - o.y0) > SOFT_SLOP) {
+            o.moved = true;
+            o.el.classList.remove('down');
+          }
+          if (o.moved) lookTouch(o, t);
+        }
         else if (o.kind === 'look' || (o.kind === 'hold' && o.look)) lookTouch(o, t);
       }
       e.preventDefault();
@@ -717,6 +755,11 @@
         // auto fire still on target: keep shooting (and the other fire button may be held)
         if (!(o.a === A.FIRE && (autoOn || fireHeld()))) act(o.a, 0);
         o.el.classList.remove('down');
+      }
+      else if (o.kind === 'soft') {
+        o.el.classList.remove('down');
+        // a clean tap: lifted without sliding off, not a long rest of the thumb
+        if (t && !o.moved && now() - o.t0 < SOFT_MAX_MS) softAction(o.el);
       }
       else if (o.kind === 'ui') {
         o.el.classList.remove('down');

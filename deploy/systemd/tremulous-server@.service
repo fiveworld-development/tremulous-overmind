@@ -29,6 +29,7 @@ RestartSec=3
 # 20v20 server in 20 % of all periods: up to 30 ms stalls = late snapshots = stutter.
 # tremded is single-threaded, so 100 % is "never throttle"; the short period keeps
 # any throttle that does happen to a millisecond. Priority comes from weight + nice.
+Slice=tremulous.slice
 Nice=-10
 CPUWeight=1000
 CPUQuota=100%

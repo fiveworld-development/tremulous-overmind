@@ -16,6 +16,7 @@ RestartSec=2
 # latency matters more than throughput: every game packet passes through here, and
 # a gateway waiting for CPU delivers snapshots late and in bursts (felt as lag).
 # It needs little CPU, so a high weight costs the other sites on this host little.
+Slice=tremulous.slice
 Nice=-5
 CPUWeight=400
 CPUQuota=60%

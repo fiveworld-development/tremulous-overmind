@@ -223,8 +223,8 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
 .touch[hidden] { display: none; }
 .touch[data-mode="menu"] > * { display: none; }   /* menus: the whole layer acts as a mouse */
 .t-zone { position: absolute; top: 0; bottom: 0; }
-.t-move { left: 0; width: 42%; }
-.t-look { right: 0; width: 58%; }
+.t-move { left: 0; width: 45%; }
+.t-look { right: 0; width: 55%; }
 .t-stick { position: absolute; left: max(110px, 17%); top: 68%; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%;
   border: 1px solid var(--line-strong); background: rgba(0, 0, 0, .25); opacity: .28; transition: opacity .12s; pointer-events: none; }
 .t-stick.on { opacity: 1; }
@@ -241,17 +241,24 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
 .t-top { position: absolute; top: max(.5rem, env(safe-area-inset-top)); left: max(.5rem, env(safe-area-inset-left));
   display: flex; gap: .4rem; }
 .t-top button { position: static; height: 34px; padding: 0 .7rem; font-size: .66rem; }
-/* right thumb cluster; sizes follow the short screen side */
-.t-pad { --u: clamp(46px, 15vmin, 72px); position: absolute;
+/* right thumb cluster; sizes follow the short screen side. The containers let touches
+   through (pointer-events: none), so the gaps between buttons aim like the open view. */
+.t-pad { --u: clamp(46px, 15vmin, 72px); position: absolute; pointer-events: none;
   right: max(.75rem, env(safe-area-inset-right)); bottom: max(.75rem, env(safe-area-inset-bottom));
-  width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.3); }
-.t-fire   { right: 0; bottom: calc(var(--u) * .35); width: calc(var(--u) * 1.45); height: calc(var(--u) * 1.45); font-size: .85rem; }
-.t-alt    { right: calc(var(--u) * .2); bottom: calc(var(--u) * 1.95); width: var(--u); height: calc(var(--u) * .8); }
-.t-jump   { right: calc(var(--u) * 1.65); bottom: 0; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); }
-.t-crouch { right: calc(var(--u) * 2.85); bottom: 0; width: calc(var(--u) * .8); height: calc(var(--u) * .8); }
-.t-use    { right: calc(var(--u) * 1.65); bottom: calc(var(--u) * 1.3); width: calc(var(--u) * .9); height: calc(var(--u) * .8); }
-.t-reload { right: calc(var(--u) * 1.4); bottom: calc(var(--u) * 2.3); width: calc(var(--u) * .75); height: calc(var(--u) * .6); font-size: .6rem; }
-.t-weap   { right: calc(var(--u) * 2.75); bottom: calc(var(--u) * 1.1); width: calc(var(--u) * .8); height: calc(var(--u) * .7); font-size: .62rem; }
+  width: calc(var(--u) * 4.1); height: calc(var(--u) * 3.1); }
+.t-pad button { pointer-events: auto; }
+/* combat: fire in the thumb's resting spot, jump and alt one short reach away */
+.t-fire   { right: calc(var(--u) * .1); bottom: calc(var(--u) * .45); width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); font-size: .85rem; }
+.t-jump   { right: calc(var(--u) * 1.8); bottom: 0; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); }
+.t-alt    { right: calc(var(--u) * .35); bottom: calc(var(--u) * 2.15); width: var(--u); height: calc(var(--u) * .85); }
+.t-reload, .t-third { right: calc(var(--u) * 1.85); bottom: calc(var(--u) * 1.35); width: calc(var(--u) * .9); height: calc(var(--u) * .72); font-size: .62rem; }
+.t-crouch { right: calc(var(--u) * 3.1); bottom: 0; width: calc(var(--u) * .95); height: calc(var(--u) * .8); }
+/* rail on the right edge above the cluster: use/evolve, weapon and the contextual
+   actions; fills upwards and wraps into a second column on short screens */
+.t-rail { position: absolute; right: 0; bottom: calc(var(--u) * 3.15); pointer-events: none;
+  height: calc(100dvh - var(--u) * 3.15 - max(.75rem, env(safe-area-inset-bottom)) - max(.5rem, env(safe-area-inset-top)) - 52px);
+  display: flex; flex-flow: column-reverse wrap-reverse; align-content: flex-start; gap: .35rem; }
+.touch .t-rail button { position: static; width: calc(var(--u) * 1.05); height: calc(var(--u) * .66); font-size: .6rem; opacity: .7; }
 
 /* team and spawn picker (touch.js), drawn over the game while spectating or dead */
 .touch[data-picking] .t-pad, .touch[data-picking] .t-zone { display: none; }
@@ -297,9 +304,11 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
 .touch .t-sheet button.on { background: rgba(63, 179, 79, .18); }
 .touch .t-sheet .t-sheet-done { justify-self: end; margin-top: .2rem; padding: 0 1.1rem; }
 
-/* left fire button: above the stick area, for firing with the left thumb while the right aims */
+/* left fire button: up in the top-left corner, out of the stick's way - the left thumb
+   reaches it on purpose but never lands on it while steering */
 .t-lfire { --u: calc(clamp(46px, 15vmin, 72px) * var(--t-scale, 1));
-  left: max(.9rem, env(safe-area-inset-left)); top: 34%; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); font-size: .72rem; }
+  left: max(.9rem, env(safe-area-inset-left)); top: calc(max(.5rem, env(safe-area-inset-top)) + 9%);
+  width: calc(var(--u) * 1.05); height: calc(var(--u) * 1.05); font-size: .7rem; }
 .touch[data-picking] .t-lfire, .touch .t-lfire[hidden] { display: none; }
 /* auto fire is shooting */
 .touch .t-fire.auto { border-color: #e2493a; color: #ff8a7a; opacity: 1; box-shadow: 0 0 14px rgba(226, 73, 58, .45) inset; }
@@ -323,9 +332,6 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
   font: 600 .7rem/1 var(--menu); letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
 .t-hint.ok { border-color: var(--green); color: var(--green); }
 .t-hint[hidden] { display: none; }
-/* contextual row above the thumb cluster: deconstruct, grenade, jetpack */
-.t-ctx { position: absolute; right: calc(var(--u) * 1.4); bottom: calc(var(--u) * 3.05); display: flex; gap: .35rem; }
-.touch .t-ctx button { position: static; width: calc(var(--u) * .85); height: calc(var(--u) * .6); font-size: .6rem; }
 .touch .t-pad button[hidden] { display: none; }
 /* running vote */
 .t-vote { position: absolute; top: calc(max(.5rem, env(safe-area-inset-top)) + 44px); left: 50%; transform: translateX(-50%);

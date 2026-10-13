@@ -106,7 +106,7 @@ sudo -n install -d -o trem -g trem "$B/bin"
 sudo -n install -m 0755 -o root -g root "$O/deploy/status/tremulous-status.py" "$B/bin/tremulous-status.py"
 
 echo "== systemd"
-for u in tremulous-server@.service tremulous-gateway@.service tremulous-status.service tremulous-status.timer; do
+for u in tremulous.slice tremulous-server@.service tremulous-gateway@.service tremulous-status.service tremulous-status.timer; do
     sudo -n install -m 0644 "$O/deploy/systemd/$u" "/etc/systemd/system/$u"
 done
 sudo -n systemctl daemon-reload
