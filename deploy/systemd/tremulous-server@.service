@@ -25,10 +25,14 @@ RestartSec=3
 
 # resources: the host has 2 cores and runs near 90 % CPU pressure. A game server
 # that waits for CPU misses frames, which players see as freezes. Each instance
-# needs ~30 % of a core, so it gets priority but is capped at 70 %.
-Nice=-5
-CPUWeight=400
-CPUQuota=70%
+# averages ~40 % of a core but fights spike far higher. A 70 % quota throttled the
+# 20v20 server in 20 % of all periods: up to 30 ms stalls = late snapshots = stutter.
+# tremded is single-threaded, so 100 % is "never throttle"; the short period keeps
+# any throttle that does happen to a millisecond. Priority comes from weight + nice.
+Nice=-10
+CPUWeight=1000
+CPUQuota=100%
+CPUQuotaPeriodSec=10ms
 IOWeight=40
 # 192 MB hunk: nexus6 with 40 slots failed Hunk_Alloc at 128 (pages are only resident once used)
 MemoryHigh=320M

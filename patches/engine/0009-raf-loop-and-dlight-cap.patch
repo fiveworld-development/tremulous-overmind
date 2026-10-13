@@ -1,0 +1,60 @@
+diff --git a/src/renderergl2/tr_scene.cpp b/src/renderergl2/tr_scene.cpp
+index 67ab0d3..456c189 100644
+--- a/src/renderergl2/tr_scene.cpp
++++ b/src/renderergl2/tr_scene.cpp
+@@ -427,6 +427,39 @@ void RE_BeginScene(const refdef_t *fd)
+ 		tr.refdef.num_dlights = 0;
+ 	}
+ 
++	// Overmind: every dynamic light redraws each surface it touches once more. A flamer
++	// stream or a few explosions add 20-30 lights and multiply the draw calls into the
++	// thousands (10 fps in fights under WebGL). Keep only the r_maxDlights lights that
++	// matter most for this view: big and close beats small and far.
++	{
++		static cvar_t *maxDlights;
++		if ( !maxDlights )
++			maxDlights = ri.Cvar_Get( "r_maxDlights", "12", CVAR_ARCHIVE );
++		int keep = maxDlights->integer;
++		if ( keep >= 0 && tr.refdef.num_dlights > keep ) {
++			dlight_t *dl = tr.refdef.dlights;
++			for ( int i = 0; i < keep; i++ ) {
++				int best = i;
++				float bestScore = -1.0f;
++				for ( int j = i; j < tr.refdef.num_dlights; j++ ) {
++					vec3_t d;
++					VectorSubtract( dl[j].origin, tr.refdef.vieworg, d );
++					float score = dl[j].radius * dl[j].radius / ( DotProduct( d, d ) + 1.0f );
++					if ( score > bestScore ) {
++						bestScore = score;
++						best = j;
++					}
++				}
++				if ( best != i ) {
++					dlight_t t = dl[i];
++					dl[i] = dl[best];
++					dl[best] = t;
++				}
++			}
++			tr.refdef.num_dlights = keep;
++		}
++	}
++
+ 	// a single frame may have multiple scenes draw inside it --
+ 	// a 3D game view, 3D status bar renderings, 3D menus, etc.
+ 	// They need to be distinguished by the light flare code, because
+diff --git a/src/sys/sys_main.cpp b/src/sys/sys_main.cpp
+index d3d3f28..ae439ed 100644
+--- a/src/sys/sys_main.cpp
++++ b/src/sys/sys_main.cpp
+@@ -795,7 +795,10 @@ static void main_after_Com_Init(cb_context_t *context, int status)
+ 	// requestAnimationFrame on dedicated builds.
+ 	fps = 30;
+ #endif
+-	emscripten_set_main_loop(Sys_Frame, 90, 0);
++	// Overmind: fps 0 = requestAnimationFrame. A fixed 90 used setTimeout, whose frames
++	// drift against the display's refresh (60/120 Hz): uneven frame pacing that feels like
++	// 20 fps while the counter shows 150, and work rendered between vsyncs is thrown away.
++	emscripten_set_main_loop(Sys_Frame, fps, 0);
+ #else
+     for ( ;; )
+     {
