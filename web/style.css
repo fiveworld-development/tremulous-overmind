@@ -209,6 +209,13 @@ main { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
   font: 400 1.1rem/1 var(--mono); cursor: pointer; opacity: .5;
 }
 .exit:hover { opacity: 1; color: var(--ink); }
+/* PC: mouse look without pointer lock stops at the window edge (play.js keepPointerLock) */
+.lock-hint {
+  position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 3; pointer-events: none;
+  padding: .45rem .9rem; border: 1px solid var(--line); background: rgba(0,0,0,.6); color: var(--ink);
+  font: 400 .78rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+}
+.lock-hint[hidden] { display: none; }
 .controls { right: calc(max(0.5rem, env(safe-area-inset-right)) + 2.5rem); font-size: 1rem; }
 .fs { right: calc(max(0.5rem, env(safe-area-inset-right)) + 5rem); font-size: 1rem; }
 .controls[hidden] + .fs { right: calc(max(0.5rem, env(safe-area-inset-right)) + 2.5rem); }

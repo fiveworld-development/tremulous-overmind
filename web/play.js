@@ -128,6 +128,7 @@
           setTimeout(function () { progress(100); splash.classList.add('done'); }, wait);
           if (isTouch) attachTouch(M, 0);
           if (settings) attachSettings(M);
+          if (!isTouch) keepPointerLock(M);
           watchNav(M, server);
           watchTutorial(M);
         }
@@ -179,6 +180,46 @@
       e.preventDefault(); e.stopPropagation();
       toggle();
     }, true);
+  }
+
+  // PC mouse look needs pointer lock. Without it the browser reports cursor positions,
+  // and turning stops where the cursor meets the edge of the window - no full turn.
+  // Every menu (class pick, Escape, Options) releases the lock, and SDL asks for it again
+  // only on a click inside the canvas, and not at all when the cursor was off the canvas
+  // as the menu closed. So the page asks on every click or key press while a game is in
+  // front, and shows a hint while the lock is missing.
+  function keepPointerLock(M) {
+    if (!M._Overmind_State) return;
+    var hint = document.createElement('div');
+    hint.className = 'lock-hint';
+    hint.textContent = 'Click to aim';
+    hint.hidden = true;
+    game.appendChild(hint);
+    function inGame() {
+      var ks = M._Overmind_State();
+      // in a game, no console and no menu (0x1 console, 0x2 ui); chat typing is fine
+      return (ks & 0x100) && !(ks & 0x3) && !(window.OvermindSettings && OvermindSettings.isOpen());
+    }
+    function grab(e) {
+      if (document.pointerLockElement || game.hidden || !inGame()) return;
+      if (e.type === 'keydown' && (e.key === 'Escape' || e.key === 'F10')) return;
+      if (e.type === 'mousedown' && e.target.closest && e.target.closest('button, .om-set')) return;
+      var c = game.querySelector('canvas');
+      if (!c || !c.requestPointerLock) return;
+      try { var p = c.requestPointerLock(); if (p && p.catch) p.catch(function () { /* next press retries */ }); }
+      catch (err) { /* next press retries */ }
+    }
+    window.addEventListener('mousedown', grab, true);
+    window.addEventListener('keydown', grab, true);
+    setInterval(function () {
+      var ks = M._Overmind_State();
+      // a menu needs the cursor; SDL frees it itself, except when its relative mode never
+      // came on (the case above), so a lock the page took would outlive the menu
+      if (document.pointerLockElement && (ks & 0x100) && (ks & 0x3)) {
+        try { document.exitPointerLock(); } catch (err) { /* ignore */ }
+      }
+      hint.hidden = game.hidden || !!document.pointerLockElement || !inGame();
+    }, 250);
   }
 
   // in-game menu "Options" (branding pk3, ui/ingame.menu): the page's own settings
