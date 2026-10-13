@@ -867,7 +867,7 @@ index 28e37a7..60d6f7b 100644
 +  }
 +}
 diff --git a/src/game/g_cmds.c b/src/game/g_cmds.c
-index 9b01056..7dfdbff 100644
+index 9b01056..6a006e9 100644
 --- a/src/game/g_cmds.c
 +++ b/src/game/g_cmds.c
 @@ -609,6 +609,15 @@ void Cmd_Team_f( gentity_t *ent )
@@ -886,6 +886,199 @@ index 9b01056..7dfdbff 100644
    // stop team join spam
    if( ent->client->pers.teamChangeTime && 
        level.time - ent->client->pers.teamChangeTime < 1000 )
+@@ -2137,6 +2146,87 @@ void Cmd_ToggleItem_f( gentity_t *ent )
+     trap_SendServerCommand( ent-g_entities, va( "print \"You don't have the %s\n\"", s ) );
+ }
+ 
++/*
++=================
++G_ItemsInTheWay
++
++Overmind: the 1.3 armoury menu lists an item as buyable when selling what blocks its
++slots pays for it, and sends a plain "buy <item>" - the 1.3 game then sells the
++blocking gear itself. This game refused every such purchase with "You have no room
++to carry this" (a human holding the rifle could buy nothing but a battlesuit).
++With sell == qfalse: the credit the blocking items are worth, or -1 (reason shown to
++the player) if one of them can't be sold right now; nothing changes. With sell ==
++qtrue: sells them - call only after a check returned >= 0.
++=================
++*/
++static int G_ItemsInTheWay( gentity_t *ent, int slots, qboolean sell )
++{
++  int *stats = ent->client->ps.stats;
++  int i, value = 0;
++
++  for( i = WP_NONE + 1; i < WP_NUM_WEAPONS; i++ )
++  {
++    if( !BG_InventoryContainsWeapon( i, stats ) || !( BG_Weapon( i )->slots & slots ) )
++      continue;
++    if( !BG_Weapon( i )->purchasable )
++    {
++      G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOSLOTS );
++      return -1;
++    }
++    //guard against selling the HBUILD weapons exploit
++    if( i == WP_HBUILD && stats[ STAT_MISC ] > 0 )
++    {
++      G_TriggerMenu( ent->client->ps.clientNum, MN_H_ARMOURYBUILDTIMER );
++      return -1;
++    }
++    value += BG_Weapon( i )->price;
++    if( sell )
++    {
++      stats[ STAT_WEAPON ] = WP_NONE;
++      stats[ STAT_BUILDABLE ] = BA_NONE;
++      G_AddCreditToClient( ent->client, (short)BG_Weapon( i )->price, qfalse );
++    }
++  }
++
++  for( i = UP_NONE + 1; i < UP_NUM_UPGRADES; i++ )
++  {
++    if( !BG_InventoryContainsUpgrade( i, stats ) || !( BG_Upgrade( i )->slots & slots ) )
++      continue;
++    if( !BG_Upgrade( i )->purchasable )
++    {
++      G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOSLOTS );
++      return -1;
++    }
++    if( i == UP_BATTLESUIT )
++    {
++      vec3_t newOrigin;
++
++      if( !G_RoomForClassChange( ent, PCL_HUMAN, newOrigin ) )
++      {
++        G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOROOMBSUITOFF );
++        return -1;
++      }
++      if( sell )
++      {
++        VectorCopy( newOrigin, ent->client->ps.origin );
++        stats[ STAT_CLASS ] = PCL_HUMAN;
++        ent->client->pers.classSelection = PCL_HUMAN;
++        ent->client->ps.eFlags ^= EF_TELEPORT_BIT;
++      }
++    }
++    value += BG_Upgrade( i )->price;
++    if( sell )
++    {
++      BG_RemoveUpgradeFromInventory( i, stats );
++      if( i == UP_BATTPACK )
++        G_GiveClientMaxAmmo( ent, qtrue );
++      G_AddCreditToClient( ent->client, (short)BG_Upgrade( i )->price, qfalse );
++    }
++  }
++
++  return value;
++}
++
+ /*
+ =================
+ Cmd_Buy_f
+@@ -2148,6 +2238,7 @@ void Cmd_Buy_f( gentity_t *ent )
+   weapon_t  weapon;
+   upgrade_t upgrade;
+   qboolean  energyOnly;
++  int       inTheWay;
+ 
+   trap_Argv( 1, s, sizeof( s ) );
+ 
+@@ -2202,24 +2293,30 @@ void Cmd_Buy_f( gentity_t *ent )
+       return;
+     }
+ 
++    // In some instances, weapons can't be changed (checked before anything is sold)
++    if( !BG_PlayerCanChangeWeapon( &ent->client->ps ) )
++      return;
++
++    //what is in the way, and what is it worth? (sold below, see G_ItemsInTheWay)
++    inTheWay = G_ItemsInTheWay( ent, BG_Weapon( weapon )->slots, qfalse );
++    if( inTheWay < 0 )
++      return;
++
+     //can afford this?
+-    if( BG_Weapon( weapon )->price > (short)ent->client->pers.credit )
++    if( BG_Weapon( weapon )->price > (short)ent->client->pers.credit + inTheWay )
+     {
+       G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOFUNDS );
+       return;
+     }
+ 
+-    //have space to carry this?
++    //make space to carry this
++    G_ItemsInTheWay( ent, BG_Weapon( weapon )->slots, qtrue );
+     if( BG_Weapon( weapon )->slots & BG_SlotsForInventory( ent->client->ps.stats ) )
+     {
+       G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOSLOTS );
+       return;
+     }
+ 
+-    // In some instances, weapons can't be changed
+-    if( !BG_PlayerCanChangeWeapon( &ent->client->ps ) )
+-      return;
+-
+     ent->client->ps.stats[ STAT_WEAPON ] = weapon;
+     ent->client->ps.ammo = BG_Weapon( weapon )->maxAmmo;
+     ent->client->ps.clips = BG_Weapon( weapon )->maxClips;
+@@ -2245,20 +2342,6 @@ void Cmd_Buy_f( gentity_t *ent )
+       return;
+     }
+ 
+-    //can afford this?
+-    if( BG_Upgrade( upgrade )->price > (short)ent->client->pers.credit )
+-    {
+-      G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOFUNDS );
+-      return;
+-    }
+-
+-    //have space to carry this?
+-    if( BG_Upgrade( upgrade )->slots & BG_SlotsForInventory( ent->client->ps.stats ) )
+-    {
+-      G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOSLOTS );
+-      return;
+-    }
+-
+     // Only humans can buy stuff
+     if( BG_Upgrade( upgrade )->team != TEAM_HUMANS )
+     {
+@@ -2280,6 +2363,38 @@ void Cmd_Buy_f( gentity_t *ent )
+       return;
+     }
+ 
++    //what is in the way, and what is it worth? (ammo takes no slot)
++    inTheWay = G_ItemsInTheWay( ent, BG_Upgrade( upgrade )->slots, qfalse );
++    if( inTheWay < 0 )
++      return;
++
++    //can afford this?
++    if( BG_Upgrade( upgrade )->price > (short)ent->client->pers.credit + inTheWay )
++    {
++      G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOFUNDS );
++      return;
++    }
++
++    //a battlesuit needs room to stand in; check before selling anything for it
++    if( upgrade == UP_BATTLESUIT )
++    {
++      vec3_t newOrigin;
++
++      if( !G_RoomForClassChange( ent, PCL_HUMAN_BSUIT, newOrigin ) )
++      {
++        G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOROOMBSUITON );
++        return;
++      }
++    }
++
++    //make space to carry this
++    G_ItemsInTheWay( ent, BG_Upgrade( upgrade )->slots, qtrue );
++    if( BG_Upgrade( upgrade )->slots & BG_SlotsForInventory( ent->client->ps.stats ) )
++    {
++      G_TriggerMenu( ent->client->ps.clientNum, MN_H_NOSLOTS );
++      return;
++    }
++
+     if( upgrade == UP_AMMO )
+       G_GiveClientMaxAmmo( ent, energyOnly );
+     else
 diff --git a/src/game/g_local.h b/src/game/g_local.h
 index 78f9272..c3d3048 100644
 --- a/src/game/g_local.h
