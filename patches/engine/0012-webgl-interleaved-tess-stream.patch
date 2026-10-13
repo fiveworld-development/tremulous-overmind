@@ -1,5 +1,30 @@
+diff --git a/src/renderergl2/tr_extensions.cpp b/src/renderergl2/tr_extensions.cpp
+index fdb574f..84dd494 100644
+--- a/src/renderergl2/tr_extensions.cpp
++++ b/src/renderergl2/tr_extensions.cpp
+@@ -114,6 +114,20 @@ void GLimp_InitExtraExtensions()
+     // OpenGL 3.0 - GL_ARB_vertex_array_object
+     extension = "GL_ARB_vertex_array_object";
+     glRefConfig.vertexArrayObject = qfalse;
++#ifdef EMSCRIPTEN
++    // Overmind: WebGL2 has vertex array objects in core (it never lists the desktop
++    // extension name). Without them every switch between the world, a model and the
++    // dynamic stream re-sets all attribute pointers and enables - thousands of GL calls a
++    // frame, each a trip through the browser's GPU process.
++    if (1)
++    {
++        QGL_ARB_vertex_array_object_PROCS;
++
++        glRefConfig.vertexArrayObject = (qglBindVertexArray && qglGenVertexArrays && qglDeleteVertexArrays) ? qtrue : qfalse;
++        ri.Printf(PRINT_ALL, result[glRefConfig.vertexArrayObject], extension);
++    }
++    else
++#endif
+     if (q_gl_version_at_least_3_0 || SDL_GL_ExtensionSupported(extension))
+     {
+         if (q_gl_version_at_least_3_0)
 diff --git a/src/renderergl2/tr_vbo.cpp b/src/renderergl2/tr_vbo.cpp
-index f851ab6..623bbd5 100644
+index f851ab6..dd951b6 100644
 --- a/src/renderergl2/tr_vbo.cpp
 +++ b/src/renderergl2/tr_vbo.cpp
 @@ -23,6 +23,9 @@ along with Tremulous; if not, see <https://www.gnu.org/licenses/>
@@ -12,7 +37,18 @@ index f851ab6..623bbd5 100644
  
  void R_VaoPackTangent(int16_t *out, vec4_t v)
  {
-@@ -497,6 +500,7 @@ void R_InitVaos(void)
+@@ -376,7 +379,10 @@ void R_BindVao(vao_t * vao)
+ 
+ 			// tess VAO doesn't have vertex pointers set until data is uploaded
+ 			if (vao != tess.vao)
++			{
+ 				Vao_SetVertexPointers(vao);
++				tessLayoutUsed = ~0u;   // pointers are global here: the stream's are gone
++			}
+ 		}
+ 	}
+ }
+@@ -497,6 +503,7 @@ void R_InitVaos(void)
  	tess.attribPointers[ATTR_INDEX_LIGHTDIRECTION] = tess.lightdir;
  
  	Vao_SetVertexPointers(tess.vao);
@@ -20,7 +56,7 @@ index f851ab6..623bbd5 100644
  
  	R_BindNullVao();
  
-@@ -606,12 +610,19 @@ void RB_UpdateTessVao(unsigned int attribBits)
+@@ -606,12 +613,19 @@ void RB_UpdateTessVao(unsigned int attribBits)
  		// whole SHADER_MAX_VERTEXES-sized buffers (bufferData NULL) twice per batch: in WebGL
  		// every such call is a fresh, zero-filled ~300 KB allocation (~45 batches a frame),
  		// and on ANGLE/Metal (Safari, Chrome on Mac) a bufferSubData into a buffer the GPU
@@ -45,7 +81,7 @@ index f851ab6..623bbd5 100644
  
  		R_BindVao(tess.vao);
  		qglBindBuffer(GL_ARRAY_BUFFER, tess.vao->vertexesVBO);
-@@ -620,26 +631,58 @@ void RB_UpdateTessVao(unsigned int attribBits)
+@@ -620,26 +634,58 @@ void RB_UpdateTessVao(unsigned int attribBits)
  		if(!(attribBits & ATTR_BITS))
  			attribBits = ATTR_BITS;
  
@@ -95,7 +131,7 @@ index f851ab6..623bbd5 100644
  				}
 +			}
 +		}
- 
++
 +		if (usedBits != tessLayoutUsed)
 +		{
 +			for (attribIndex = 0; attribIndex < numUsed; attribIndex++)
@@ -105,7 +141,7 @@ index f851ab6..623bbd5 100644
 +			}
 +			tessLayoutUsed = usedBits;
 +		}
-+
+ 
 +		for (attribIndex = 0; attribIndex < ATTR_INDEX_COUNT; attribIndex++)
 +		{
 +			uint32_t attribBit = 1 << attribIndex;
@@ -115,7 +151,7 @@ index f851ab6..623bbd5 100644
  				if (!(glState.vertexAttribsEnabled & attribBit))
  				{
  					qglEnableVertexAttribArray(attribIndex);
-@@ -656,7 +699,7 @@ void RB_UpdateTessVao(unsigned int attribBits)
+@@ -656,7 +702,7 @@ void RB_UpdateTessVao(unsigned int attribBits)
  			}
  		}
  
