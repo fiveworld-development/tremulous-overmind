@@ -54,6 +54,38 @@
     } catch (e) { gpu = '?'; }
   });
 
+  // network: the game socket. Smooth frames with a frozen world mean the snapshots
+  // stopped coming; record gaps between incoming and outgoing messages per report.
+  var net = { inMax: 0, in250: 0, in1000: 0, inN: 0, outMax: 0, out250: 0, lastIn: 0, lastOut: 0 };
+  var WS = window.WebSocket;
+  if (typeof WS === 'function') {
+    var send = WS.prototype.send;
+    WS.prototype.send = function () {
+      var t = performance.now();
+      if (net.lastOut && document.visibilityState === 'visible') {
+        var g = t - net.lastOut;
+        if (g > net.outMax) net.outMax = g;
+        if (g > 250) net.out250++;
+      }
+      net.lastOut = t;
+      if (!this.__omNet) {
+        this.__omNet = true;
+        this.addEventListener('message', function () {
+          var n = performance.now();
+          if (net.lastIn && document.visibilityState === 'visible') {
+            var gi = n - net.lastIn;
+            if (gi > net.inMax) net.inMax = gi;
+            if (gi > 250) net.in250++;
+            if (gi > 1000) net.in1000++;
+          }
+          net.lastIn = n; net.inN++;
+        });
+        this.addEventListener('close', function () { net.lastIn = net.lastOut = 0; });
+      }
+      return send.apply(this, arguments);
+    };
+  }
+
   // frame timing: the engine's main loop runs in requestAnimationFrame
   var frames = [];          // {dt, work, draws, bufs, kb, tex, prog}
   var lastT = 0, work = 0;
@@ -137,8 +169,14 @@
       // a typical frame: gl_attr_unif_use_bindtex_draws_bufs
       mid: mid ? [mid.gl, mid.attr, mid.unif, mid.use, mid.bt, mid.draws, mid.bufs].join('_') : '',
       // Chrome long animation frames: dur_blocking_script_render(start->end)_scriptCount
-      loaf: loaf
+      loaf: loaf,
+      // game socket: messages in, longest gap in/out (ms), gaps over 250 ms / 1 s
+      net: [net.inN, Math.round(net.inMax), net.in250, net.in1000, Math.round(net.outMax), net.out250].join('_'),
+      // pointer lock held, page brightness (CSS filter on the canvas)
+      lk: document.pointerLockElement ? 1 : 0,
+      br: (window.OvermindBrightness && OvermindBrightness.get()) || 1
     };
+    net.inMax = net.outMax = 0; net.in250 = net.in1000 = net.out250 = net.inN = 0;
     sent++;
     var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
     try { fetch(ENDPOINT + '?' + qs, { method: 'GET', keepalive: true, credentials: 'omit', cache: 'no-store' }); }

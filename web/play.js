@@ -200,9 +200,14 @@
       // in a game, no console and no menu (0x1 console, 0x2 ui); chat typing is fine
       return (ks & 0x100) && !(ks & 0x3) && !(window.OvermindSettings && OvermindSettings.isOpen());
     }
+    var lastAsk = 0;
     function grab(e) {
-      if (document.pointerLockElement || game.hidden || !inGame()) return;
+      if (document.pointerLockElement || game.hidden || e.repeat) return;
+      // a held key repeats ~30 times a second; one request per press, at most every 0.5 s
+      var now = Date.now();
+      if (now - lastAsk < 500 || !inGame()) return;
       if (e.type === 'keydown' && (e.key === 'Escape' || e.key === 'F10')) return;
+      lastAsk = now;
       if (e.type === 'mousedown' && e.target.closest && e.target.closest('button, .om-set')) return;
       var c = game.querySelector('canvas');
       if (!c || !c.requestPointerLock) return;
