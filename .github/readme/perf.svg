@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Before and after: buffer memory per frame 18 MB to 57 KB, GL calls per draw 10.7 to 7.1, large uploads in fights frequent to zero, server CPU throttling 20 percent to 0.7 percent">
+  <title>Performance work, before and after</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101418"/>
+      <stop offset="1" stop-color="#0a0c0f"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .h { font: 700 13px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #8b96a3; letter-spacing: 2px; }
+    .m { font: 600 17px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #e8edf2; }
+    .w { font: 400 13px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #6f7a86; }
+    .v { font: 700 14px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+  </style>
+  <rect x="1" y="1" width="1198" height="418" rx="14" fill="url(#bg)" stroke="#232a32"/>
+
+  <text class="h" x="48" y="50">BEFORE → AFTER</text>
+  <g transform="translate(860 40)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="#e0353b"/>
+    <text class="w" x="22" y="12">before</text>
+    <rect x="140" y="0" width="14" height="14" rx="3" fill="#36c8e0"/>
+    <text class="w" x="162" y="12">now</text>
+  </g>
+
+  <!-- row 1 -->
+  <g transform="translate(48 92)">
+    <text class="m" x="0" y="0">GPU buffer memory allocated per frame</text>
+    <text class="w" x="0" y="20">engine 0006 · measured in a live 20v20 match</text>
+    <rect x="440" y="-18" width="560" height="14" rx="4" fill="#e0353b"/>
+    <text class="v" x="1012" y="-6" fill="#e0353b">18 MB</text>
+    <rect x="440" y="4" width="4" height="14" rx="2" fill="#36c8e0"/>
+    <text class="v" x="456" y="16" fill="#36c8e0">57 KB</text>
+  </g>
+
+  <!-- row 2 -->
+  <g transform="translate(48 172)">
+    <text class="m" x="0" y="0">WebGL calls per draw</text>
+    <text class="w" x="0" y="20">engine 0012 · interleaved stream + WebGL2 VAOs</text>
+    <rect x="440" y="-18" width="560" height="14" rx="4" fill="#e0353b"/>
+    <text class="v" x="1012" y="-6" fill="#e0353b">10.7</text>
+    <rect x="440" y="4" width="371" height="14" rx="4" fill="#36c8e0"/>
+    <text class="v" x="823" y="16" fill="#36c8e0">7.1</text>
+  </g>
+
+  <!-- row 3 -->
+  <g transform="translate(48 252)">
+    <text class="m" x="0" y="0">Buffer rewrites in a fight (VAO cache)</text>
+    <text class="w" x="0" y="20">engine 0011 · the combat stutter on Apple GPUs</text>
+    <rect x="440" y="-18" width="560" height="14" rx="4" fill="#e0353b"/>
+    <text class="v" x="1012" y="-6" fill="#e0353b">12 MB</text>
+    <rect x="440" y="4" width="4" height="14" rx="2" fill="#36c8e0"/>
+    <text class="v" x="456" y="16" fill="#36c8e0">none</text>
+  </g>
+
+  <!-- row 4 -->
+  <g transform="translate(48 332)">
+    <text class="m" x="0" y="0">Game server CPU periods throttled</text>
+    <text class="w" x="0" y="20">systemd slice + 10 ms quota period · full servers</text>
+    <rect x="440" y="-18" width="560" height="14" rx="4" fill="#e0353b"/>
+    <text class="v" x="1012" y="-6" fill="#e0353b">20%</text>
+    <rect x="440" y="4" width="20" height="14" rx="4" fill="#36c8e0"/>
+    <text class="v" x="472" y="16" fill="#36c8e0">0.7%</text>
+  </g>
+
+  <text class="w" x="48" y="396">Main loop on requestAnimationFrame instead of a 90 Hz timer, -O3 + wasm SIMD, no glGetError round trips, the 12 most important dynamic lights per frame.</text>
+</svg>

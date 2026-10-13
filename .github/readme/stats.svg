@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="230" viewBox="0 0 1200 230" role="img" aria-label="12 engine patches, 40 players per server, 99.7 percent less GPU buffer churn, self-healing servers">
+  <title>Tremulous Overmind in numbers</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101418"/>
+      <stop offset="1" stop-color="#0a0c0f"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e0353b"/>
+      <stop offset="0.5" stop-color="#7a4b8f"/>
+      <stop offset="1" stop-color="#36c8e0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .n { font: 700 64px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -1px; }
+    .l { font: 600 15px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #e8edf2; letter-spacing: 1.5px; }
+    .s { font: 400 14px 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #8b96a3; }
+  </style>
+  <rect x="1" y="1" width="1198" height="228" rx="14" fill="url(#bg)" stroke="#232a32"/>
+  <rect x="1" y="1" width="1198" height="4" rx="2" fill="url(#edge)"/>
+
+  <g transform="translate(48 0)">
+    <text class="n" x="0" y="112" fill="#e0353b">12</text>
+    <text class="l" x="0" y="148">ENGINE PATCHES</text>
+    <text class="s" x="0" y="174">input API, WebGL diet,</text>
+    <text class="s" x="0" y="194">native cgame, crash exit</text>
+  </g>
+  <line x1="320" y1="44" x2="320" y2="196" stroke="#232a32"/>
+  <g transform="translate(348 0)">
+    <text class="n" x="0" y="112" fill="#c0405a">40</text>
+    <text class="l" x="0" y="148">PLAYERS · 20 VS 20</text>
+    <text class="s" x="0" y="174">bots fill every seat but one,</text>
+    <text class="s" x="0" y="194">around the clock</text>
+  </g>
+  <line x1="620" y1="44" x2="620" y2="196" stroke="#232a32"/>
+  <g transform="translate(648 0)">
+    <text class="n" x="0" y="112" fill="#5b8fc9">−99.7%</text>
+    <text class="l" x="0" y="148">GPU BUFFER CHURN</text>
+    <text class="s" x="0" y="174">18 MB → 57 KB allocated</text>
+    <text class="s" x="0" y="194">per frame, live 20v20</text>
+  </g>
+  <line x1="920" y1="44" x2="920" y2="196" stroke="#232a32"/>
+  <g transform="translate(948 0)">
+    <text class="n" x="0" y="112" fill="#36c8e0">24/7</text>
+    <text class="l" x="0" y="148">SELF-HEALING</text>
+    <text class="s" x="0" y="174">watchdog restarts servers,</text>
+    <text class="s" x="0" y="194">clients rejoin on their own</text>
+  </g>
+</svg>

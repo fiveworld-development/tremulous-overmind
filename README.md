@@ -1,176 +1,180 @@
 <p align="center">
-  <img src="web/img/title.jpg" width="480" alt="TREMULOUS">
+  <a href="https://webnova360.com/play-tremulous/"><img src="web/img/title.jpg" width="520" alt="TREMULOUS"></a>
 </p>
 
-<h3 align="center">Tremulous Overmind</h3>
+<h3 align="center">Overmind — the browser edition, rebuilt</h3>
+
 <p align="center">
-  The 2006 aliens-vs-humans shooter, running in a browser tab on PC, tablet and phone.<br>
-  <a href="https://webnova360.com/play-tremulous/"><b>Play now</b></a> · Presented by <a href="https://webnova360.com/?ref=github"><b>WebNova360.com</b></a>
+  The 2006 aliens-vs-humans classic in a browser tab: PC, tablet and phone,<br>
+  full 20v20 servers, no download, no account.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/code-GPL--3.0-informational" alt="GPL-3.0">
-  <img src="https://img.shields.io/badge/game%20data-CC%20BY--SA%202.5-informational" alt="CC BY-SA 2.5">
+  <a href="https://webnova360.com/play-tremulous/"><img src="https://img.shields.io/badge/%E2%96%B6%20%20PLAY%20NOW-webnova360.com%2Fplay--tremulous-c62828?style=for-the-badge&labelColor=1a1d21" alt="Play now"></a>
 </p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fplay.webnova360.com%2Fstatus.json&query=%24%5B%271%27%5D.map&label=Overmind%20Arena%20%C2%B7%2020v20&color=8e2a2e&labelColor=1a1d21&cacheSeconds=120" alt="Overmind Arena: current map">
+  <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fplay.webnova360.com%2Fstatus.json&query=%24%5B%272%27%5D.map&label=Reactor%20Skirmish%20%C2%B7%2010v10&color=1f6f80&labelColor=1a1d21&cacheSeconds=120" alt="Reactor Skirmish: current map">
+  <img src="https://img.shields.io/badge/engine-WebAssembly%20%2B%20WebGL2-5b5fc7?labelColor=1a1d21" alt="WebAssembly + WebGL2">
+  <img src="https://img.shields.io/badge/license-GPL%20%2F%20CC%20BY--SA-4b5563?labelColor=1a1d21" alt="GPL / CC BY-SA">
+</p>
+
+<p align="center">
+  <img src=".github/readme/human-base.jpg" width="100%" alt="Human base on a live 20v20 server: telenode, armoury, turret, bots spawning">
+</p>
+<p align="center"><sub>Live 20v20 server, captured from the browser client. Everything on screen except you is a bot.</sub></p>
 
 ---
 
-Tremulous is a team game: one side grows an alien hive around the **Overmind**, the other holds a human base powered by a **Reactor**. Aliens evolve from a dretch into a tyrant; humans buy their way up from a rifle to lucifer cannons and battlesuits. You win by destroying the other team's spawns.
+**This is not a mirror.** The browser port by [justinl1996](https://github.com/justinl1996/tremulous) proved Tremulous can run in a tab. We took it from *runs* to *plays*. The changes:
 
-This repository is the browser edition we run at **[webnova360.com/play-tremulous](https://webnova360.com/play-tremulous/)**. It starts from two existing projects — the Emscripten port of Tremulous 1.3 by [justinl1996/tremulous](https://github.com/justinl1996/tremulous) and the bot game module [lepe/trem-gpp-bots](https://github.com/lepe/trem-gpp-bots) — and adds a faster WebAssembly client, a full touch control scheme, PC control settings, an installable web app, bots that keep two public servers populated around the clock, and the hosting stack that serves all of it.
+- **12 engine patches**, from a touch input API to a WebGL call diet to a native cgame.
+- **A rewritten bot game module** that keeps two servers full around the clock.
+- **A touch-first web client** with about 2,500 lines of hand-written controls, settings and loader.
+- **A hosting stack** that heals itself when something crashes.
+
+Every change ships as a plain patch file on top of a pinned upstream commit, so each one can be reviewed on its own.
 
 <p align="center">
-  <img src="web/img/maps/niveus.jpg" width="32%" alt="Niveus">
-  <img src="web/img/maps/atcs.jpg" width="32%" alt="ATCS">
-  <img src="web/img/maps/nexus6.jpg" width="32%" alt="Nexus 6">
+  <img src=".github/readme/stats.svg" width="100%" alt="12 engine patches · 40 players, 20 vs 20 · −99.7 % GPU buffer churn · 24/7 self-healing">
 </p>
 
-## At a glance
+## Contents
 
-| Area | Upstream | What this repository adds |
+[Performance](#performance) · [Bots](#bots-that-play-like-a-team) · [Controls](#controls-touch-and-pc) · [Self-healing ops](#self-healing-servers) · [Architecture](#architecture) · [Build](#build-and-deploy) · [Credits](#credits)
+
+---
+
+## Performance
+
+A shooter that runs at 150 fps but *feels* like 20 is broken. We measured frame time and GL calls on real hardware with a full 20v20 server and fixed what we found. One target mattered most: Chrome on Apple Silicon, where every WebGL call crosses into the GPU process and goes through ANGLE to Metal.
+
+<p align="center">
+  <img src=".github/readme/perf.svg" width="100%" alt="Before and after chart">
+</p>
+
+| Patch | What changed | Why it matters |
 |---|---|---|
-| Engine (WASM client) | justinl1996/tremulous, pinned commit | 6 patches: performance, browser input API, menu cursor, memory |
-| Game logic / bots | lepe/trem-gpp-bots (P-Bot, GPP) | 1 patch (~450 added lines): always-full servers, bot base building, skill levels, touch hooks in cgame, HUD fix |
-| Web client | — | Landing page and launcher, ~690 lines of touch controls, ~520 lines of PC settings, PWA, service worker |
-| Infrastructure | — | nginx site, Cloudflare Worker route, hardened systemd units, status probe, host build and deploy scripts |
+| [`0005`](patches/engine/0005-max-performance.patch) | `-O3`, WebAssembly SIMD, no `glGetError()` when errors are ignored | each `glGetError` was a synchronous GPU round trip, many times per frame |
+| [`0006`](patches/engine/0006-webgl-stream-tess-vertices.patch) | Exact-size vertex uploads instead of orphaning full buffers | about 45 fresh 300 KB buffers a frame dropped to one tight upload: **18 MB → 57 KB** |
+| [`0008`](patches/engine/0008-native-cgame.patch) | Client game module compiled into the wasm | the HUD, prediction and effects run as native wasm instead of in the QVM interpreter |
+| [`0009`](patches/engine/0009-raf-loop-and-dlight-cap.patch) | Main loop on `requestAnimationFrame`, keep the 12 most important dynamic lights | frames line up with the display; a firefight no longer multiplies light passes |
+| [`0011`](patches/engine/0011-webgl-no-vao-cache.patch) | Skip the renderer's 12 MB VAO cache on WebGL | rewriting a buffer the GPU still uses stalls Metal; this was **the combat stutter** |
+| [`0012`](patches/engine/0012-webgl-interleaved-tess-stream.patch) | Interleaved vertex stream, attribute pointers only on layout change, real WebGL2 VAOs | **a third fewer GL calls**: 10.7 → 7.1 per draw |
 
-Everything upstream is applied as plain patch files on top of pinned sources, so each change is reviewable on its own.
+Nothing was turned down to get there: same textures, same shaders, same resolution. [`web/perf.js`](web/perf.js) sends anonymous frame-time reports (fps, slow frames, draw and upload counts, GPU string, no IP logged), so regressions on devices we don't own show up.
 
-## What we changed
+## Bots that play like a team
 
-### Engine (WebAssembly client)
+Base: [lepe/trem-gpp-bots](https://github.com/lepe/trem-gpp-bots). Our patch is [`patches/bots/0001-overmind-bots.patch`](patches/bots/0001-overmind-bots.patch): about 680 lines added across 16 files.
 
-Base: [justinl1996/tremulous](https://github.com/justinl1996/tremulous) at a pinned commit, built with Emscripten 3.1.74. Patches in [`patches/engine`](patches/engine), applied in order:
+<table>
+<tr>
+<td width="50%"><img src=".github/readme/battlesuit.jpg" alt="Battlesuit bot next to a medistation"></td>
+<td width="50%"><img src=".github/readme/alien-base.jpg" alt="Alien base seen by a dretch"></td>
+</tr>
+</table>
 
-- **0001 – Menu cursor follows the mouse.** The engine kept the 1.1/GPP menus in relative-mouse mode in the browser, so the drawn cursor drifted away from the real one and menu items could not be hit. Menus now pin the in-game cursor to the window cursor by feeding exact deltas in 640x480 UI space.
-- **0002 – Release build without Emscripten assertions** (`-s ASSERTIONS=0`).
-- **0003 – Browser input API and smaller memory footprint.**
-  - Exports `Overmind_Action`, `Overmind_Look`, `Overmind_Pointer`, `Overmind_State`, `Overmind_Resize` and `Overmind_Command`. The page's touch layer queues key, look and menu-pointer events straight into the engine, with no synthetic DOM events and no pointer lock required.
-  - `Overmind_Resize` changes the render size after rotation or resize and waits until the size settles before restarting video.
-  - Initial memory goes from 768 MB to 320 MB and the stack from 256 MB to 64 MB, with memory growth still enabled.
-  - Declares `ERRNO_CODES` so the system libraries link with current Emscripten.
-- **0004 – `-O2` instead of `-O1`.** Upstream used `-O1` as a workaround for a signature-mismatch issue; that workaround made the QVM interpreter much slower.
-- **0005 – Maximum performance without visual change.**
-  - `-O3` and WebAssembly SIMD (`-msimd128`).
-  - `GL_TRACK_ERRORS=0`.
-  - Both renderers check `r_ignoreGLErrors` *before* calling `glGetError()`, which is a synchronous round trip to the GPU process in WebGL and ran many times per frame.
-- **0006 – Stream tess vertices with exact-size uploads.** The stock GL2 renderer orphaned the full `SHADER_MAX_VERTEXES`-sized vertex and index buffers (`bufferData(NULL)`) twice per batch. In WebGL each of those calls allocates a fresh, zero-filled buffer of about 300 KB, at roughly 45 batches a frame, and on ANGLE/Metal a sub-upload into a buffer still in use copies the whole buffer. The patch packs only the used attributes into one stream and uploads exactly that with a single `bufferData` per buffer. Measured in a live 20v20 match (WebGL call counters in the browser): buffer memory allocated per frame went from about 18 MB to about 57 KB.
+- **Always one seat free.** `g_bot_fillTeam N` fills both teams to N vs N but never past 2N−1. When a real player picks a side, a bot on that side leaves for them.
+- **Bots build bases.** P-Bot fought, evolved and bought, but never built. Our bot builders rebuild a lost core first, then place structures through the same `G_CanBuild()` check a player uses. Alien bots stay on creep and don't build through walls.
+- **Skill 1–10 per map.** Each map rolls a base skill, and every bot gets ±2 around it. Skill scales aim error, and bots turn with human-like speed.
+- **A believable lobby.** Bots have real-looking names and per-bot pings with jitter.
+- **The armoury works like the 1.3 menus.** Buying a weapon or upgrade sells whatever blocks its slot and credits you for it. You no longer see "no room to carry this".
+- **Crash fixes from real matches.** The bot path history overflowed into the allocator, and map changes freed a path array sized by a pointer.
 
-### Game logic and bots
+## Controls: touch and PC
 
-Base: [lepe/trem-gpp-bots](https://github.com/lepe/trem-gpp-bots) (game and cgame QVM). One patch: [`patches/bots/0001-overmind-bots.patch`](patches/bots/0001-overmind-bots.patch).
+**Touch** ([`web/touch.js`](web/touch.js), about 800 lines, loaded only on touch-first devices):
 
-- **Always-full servers.** `g_bot_fillTeam N` makes a server look like an N vs N match with exactly one open seat. Teams are topped up with bots, but bots plus real players never exceed 2N-1, so the next player always finds a seat, and a bot leaves as soon as that player joins a team.
-- **Bot removal fix.** Bots live in the private slots at the bottom of the client range, so a connecting player is never given a bot's slot. Removal now searches every slot instead of the top range the original code assumed.
-- **Team balance on real players only.** Anyone can pick the side they want, and a bot on that team gives up its seat.
-- **Bots build bases.** The P-Bot AI fought, evolved and bought, but never built. Bot builders now rebuild a lost core first, then place structures near the base. Each placement goes through the same `G_CanBuild()` check as a real player standing there, aliens stay within creep range, and nothing is built through walls (`g_bot_build`).
-- **Skill 1–10.** `g_bot_skill 0` rolls a base skill per map and spreads each bot ±2 around it. Skill scales aim error.
-- **Believable lobby.** Bots get a new name list and a per-bot ping with jitter.
-- **Touch support in cgame.**
-  - The `overmind_state` cvar exports team, class, movement type and stages for the page's team and spawn pickers.
-  - With `overmind_touch` set, the small engine team and class menus are skipped.
-  - `overmind_aim` is set while the crosshair rests on a living enemy in reach of the held weapon. This drives auto fire. Builders, charge weapons and lob weapons never auto-fire.
-- **HUD ownerdraw fix.** The ownerdraw enum is back in step with the 1.3 HUD files. This fixes a grey box in the middle of the screen and the misplaced console and tutorial text.
+- **Moving and aiming**
+  - A floating move stick that appears under your thumb. Push to the rim to sprint.
+  - Drag-to-look that is 1:1 for normal drags and accelerates only on flicks, with mild aim friction while the crosshair is on an enemy.
+  - Optional gyro aiming with a deadzone, including the iOS permission flow.
+- **Buttons**
+  - Auto fire, driven by a cgame flag that knows when the crosshair rests on an enemy in range of the held weapon.
+  - A second fire button for the left thumb.
+  - Every button in the right thumb cluster is "soft": a thumb that lands on it to aim just aims, and only a clean tap triggers it.
+  - Buttons change per class: each alien gets its own attacks and wallwalk, humans get medkit, jetpack, grenade and build.
+- **Menus**
+  - Large team, class and build pickers.
+  - Chat through the device keyboard, a vote bar, and haptics.
+  - Button size and brightness settings.
 
-The patched `cgame.qvm` is shipped to clients as `zz-overmind-vm.pk3`, because the bot game module needs its matching client module.
+**PC** ([`web/settings.js`](web/settings.js), F10 or Escape → Options):
 
-### Web client
+- Rebindable keys that apply live, plus sensitivity, inverted look and raw mouse input.
+- In-game brightness for the darker maps. The engine's gamma needs hardware gamma ramps, which a browser can't provide, so we brighten the finished picture instead.
+- Fullscreen with Keyboard Lock, so Escape opens the game menu instead of leaving fullscreen.
 
-Source: [`web/`](web), assembled by [`scripts/build-web.js`](scripts/build-web.js).
+## Self-healing servers
 
-**Touch controls** ([`web/touch.js`](web/touch.js), loaded only on touch-first devices):
+Nobody should have to SSH in at 3 a.m.
 
-Movement and aiming:
-- A floating move stick that appears under the thumb. Push it to the rim to sprint, or double-tap and hold.
-- Drag-to-look that is linear for normal drags and accelerates fast flicks, with calmer vertical speed, per-frame smoothing (touch events and frames tick at different rates) and aim friction while the crosshair is on an enemy. The thumb can keep aiming from any button in the right cluster.
-- Optional gyro aiming with a deadzone and smoothing, including the iOS permission flow.
+| Layer | What happens |
+|---|---|
+| **Engine** [`0010`](patches/engine/0010-dedicated-exit-on-drop.patch) | The dedicated server exits on an error that would have left it idle on no map. systemd restarts it. |
+| **Watchdog** [`deploy/status/tremulous-watchdog.py`](deploy/status/tremulous-watchdog.py) | It queries each server every 10 s. After three failed or mapless answers it restarts the server, so even a hung process comes back. |
+| **Client** [`web/play.js`](web/play.js) | If the connection drops mid-game, the page rejoins on its own once the server is back. |
+| **systemd** [`deploy/systemd`](deploy/systemd) | Game servers run in their own top-level slice with high CPU weight and a 10 ms quota period, so a busy shared host can't starve a 40-player match. |
 
-Fire and buttons:
-- Auto fire driven by `overmind_aim`, plus a second fire button for the left thumb.
-- Class-aware buttons: each alien class gets its own secondary and third attacks and wallwalk. Humans get their gear: medkit, jetpack, grenade and deconstruct for builders.
-- A crouch/wallwalk toggle and a Use button for armoury, evolve and build.
+Security comes with it:
 
-Team, chat and feedback:
-- Large team and spawn pickers, a "waiting to spawn" queue banner, and one-tap respawn as the chosen class.
-- Chat through the device keyboard (all or team), and a vote bar for global and team votes.
-- Haptics, left- or right-handed layouts and button sizes, all in a settings sheet.
+- Units run unprivileged with `ProtectSystem=strict`, a syscall filter and localhost-only networking.
+- nginx sends a strict CSP (no inline scripts) and enforces per-IP limits.
+- Engine patch [`0007`](patches/engine/0007-gateway-connection-isolation.patch) makes sure nobody behind the WebSocket gateway can take over another player's slot by guessing a qport.
 
-**PC controls** ([`web/settings.js`](web/settings.js), F10 or the gear button):
-- Rebindable keys that apply live and are saved locally. Escape -> Options in the game opens this panel; a button leads on to the game's graphics and sound options.
-- Fullscreen starts with the game; Keyboard Lock keeps Escape for the game menu (hold Escape to leave fullscreen), plus a fullscreen button.
-- The keyboard tutorial appears for a few seconds after each spawn or class change instead of covering the screen permanently.
-- Mouse sensitivity, inverted look, and raw mouse input (pointer lock without OS acceleration, with a fallback where the browser doesn't support it).
-
-**Rendering and connection** ([`web/play.js`](web/play.js)):
-- The render size follows the play area in device pixels, capped by a pixel budget of about 1920x1200, and always keeps the play area's aspect ratio.
-- Self-healing resize: the page checks the real canvas every second and fixes any mismatch after rotation, fullscreen or mobile browser bars appear or disappear.
-- The page owns fullscreen (`r_fullscreen 0`). This ends the fullscreen flip-flop on every video restart.
-- Key bindings are applied as console commands after start: the engine keeps only 32 `+` commands from its command line.
-- Network defaults for 40-player snapshots: `rate 90000`, `snaps 40`, 125 input packets per second, uncapped fps.
-- Larger audio buffers (2048 samples on touch, 1024 on desktop) mean fewer main-thread audio callbacks competing with rendering.
-- Warnings appear as a text line instead of a modal box. The keyboard tutorial and the team overlay are hidden on touch.
-- The in-game main menu (branding pak) can switch servers or go back to the website without reloading the page. The SOCKS relay is off, so failed sockets no longer eat into the per-IP limit.
-
-**Installable app**:
-- Web manifest with icons cut from the title art, an install button, and a hint for iOS.
-- A service worker that serves pages network-first and versioned assets cache-first, and leaves game data, status and websockets alone.
-- Every page script, stylesheet and the engine wasm carries a content hash, so a cached file can never meet a different build.
-
-### Infrastructure
-
-Configuration in [`deploy/`](deploy):
-
-- **WebSocket-to-UDP gateway.** Browsers can't send UDP, so each `tremded` instance sits behind a [websockify](https://github.com/justinl1996/websockify) gateway with UDP support, bound to localhost.
-- **nginx** ([`deploy/nginx`](deploy/nginx)):
-  - Accepts only `GET` and `HEAD`.
-  - Sends a strict Content-Security-Policy (`script-src 'self' 'wasm-unsafe-eval'`, no inline scripts), HSTS, and `frame-ancestors 'none'`.
-  - Applies per-IP request and connection limits to pages and websockets.
-  - Serves content-addressed paks and wasm as immutable.
-- **Cloudflare Worker** ([`deploy/cloudflare/play-route.js`](deploy/cloudflare/play-route.js)):
-  - Serves the game under `webnova360.com/play-tremulous/` and forwards websockets.
-  - Passes the real client IP so per-player limits work through the Worker.
-  - Shows a holding page while the origin is down.
-- **systemd units** ([`deploy/systemd`](deploy/systemd)):
-  - Run as an unprivileged user with `ProtectSystem=strict`, no capabilities, a syscall filter, and `IPAddressDeny=any` except localhost.
-  - Set memory caps, and give servers and gateways CPU priority with quotas, so the game stays responsive on a shared host without starving other services.
-- **Status probe** ([`deploy/status`](deploy/status)). A timer queries both servers every 10 seconds with `getstatus` and writes `status.json` (map and player count) for the landing page.
-- **Servers** ([`deploy/server`](deploy/server)):
-  - *Overmind Arena*, 20v20, with a 45-minute time limit.
-  - *Reactor Skirmish*, 10v10, with a 25-minute time limit.
-  - Both have bots on, randomized bot skill, and their own map rotations. The remote console is disabled (empty `rconPassword`).
-
-## How it fits together
+## Architecture
 
 ```mermaid
 flowchart LR
-    B[Browser<br>tremulous.wasm + page] -- HTTPS / WSS --> CF[Cloudflare<br>Worker route /play-tremulous]
-    CF --> N[nginx<br>static files, CSP, per-IP limits]
-    N -- /ws/1 --> G1[websockify 1] -- UDP, localhost --> S1[tremded 1<br>Overmind Arena 20v20]
-    N -- /ws/2 --> G2[websockify 2] -- UDP, localhost --> S2[tremded 2<br>Reactor Skirmish 10v10]
-    T[status timer] -- getstatus --> S1 & S2
-    T -- status.json --> N
+    B[Browser<br>tremulous.wasm + page] -- HTTPS / WSS --> CF[Cloudflare<br>Worker route]
+    CF --> N[nginx<br>static, CSP, per-IP limits]
+    N -- /ws/1 --> G1[websockify] -- UDP, localhost --> S1[tremded<br>Overmind Arena 20v20]
+    N -- /ws/2 --> G2[websockify] -- UDP, localhost --> S2[tremded<br>Reactor Skirmish 10v10]
+    W[watchdog + status timer] -- getstatus --> S1 & S2
+    W -- status.json --> N
 ```
 
-Only nginx is reachable from outside. The game servers and gateways bind to localhost only.
+Browsers can't send UDP, so each server sits behind a [websockify](https://github.com/justinl1996/websockify) gateway that bridges WebSocket and UDP. Only nginx is reachable from outside.
 
-## Repository layout
+<details>
+<summary><b>All engine patches</b> (applied to <a href="https://github.com/justinl1996/tremulous">justinl1996/tremulous</a> at a pinned commit)</summary>
+
+| # | Patch | |
+|---|---|---|
+| 0001 | Menu cursor follows the mouse | menus feed exact deltas in 640×480 UI space, so items can be hit |
+| 0002 | Release build without assertions | `-s ASSERTIONS=0` |
+| 0003 | Browser input API, smaller memory | `Overmind_Action/Look/Pointer/State/Resize/Command` exports; 768 → 320 MB initial memory |
+| 0004 | `-O2` instead of `-O1` | the old `-O1` workaround made the QVM interpreter much slower |
+| 0005 | Maximum performance, no visual change | `-O3`, SIMD, `GL_TRACK_ERRORS=0`, skip `glGetError` |
+| 0006 | Stream tess vertices exactly | 18 MB → 57 KB buffer allocations per frame |
+| 0007 | Gateway connection isolation | no slot takeover behind the WebSocket gateway |
+| 0008 | Native cgame | the client game module linked into the wasm |
+| 0009 | rAF loop, dynamic light cap | `requestAnimationFrame`; `r_maxDlights` (default 12) |
+| 0010 | Dedicated exit on drop | crashes end in a restart instead of an idle server |
+| 0011 | No VAO cache on WebGL | removes the busy-buffer rewrites behind combat stutter |
+| 0012 | Interleaved tess stream, WebGL2 VAOs | 10.7 → 7.1 GL calls per draw |
+
+</details>
+
+<details>
+<summary><b>Repository layout</b></summary>
 
 | Path | Contents |
 |---|---|
-| [`patches/engine/`](patches/engine) | Engine patches 0001–0006 for justinl1996/tremulous |
-| [`patches/bots/`](patches/bots) | Game/cgame patch for lepe/trem-gpp-bots |
-| [`web/`](web) | Landing page and launcher (`index.html`, `style.css`), `play.js`, `touch.js`, `settings.js`, `sw.js`, `site.webmanifest`, images |
-| [`branding/pk3/`](branding/pk3) | In-game main menu and leave menu with server switching and the WebNova360 credit, packed into `zz-webnova360.pk3` |
-| [`scripts/build-web.js`](scripts/build-web.js) | Builds the static release: content-addressed paks and wasm, versioned page assets |
-| [`scripts/dev-server.js`](scripts/dev-server.js) | Local static server; tunnels `/ws/<n>` to the live servers for testing a local build |
-| [`scripts/remote/`](scripts/remote) | Host scripts: bootstrap, deploy, server/QVM build, wasm client build, staging and promote |
-| [`scripts/remote.ps1`](scripts/remote.ps1) | Runs a script from `scripts/remote/` on the game host over SSH |
-| [`scripts/tga2png.js`](scripts/tga2png.js) | TGA to PNG converter for artwork from the game paks |
-| [`deploy/`](deploy) | nginx site and headers, Cloudflare Worker, systemd units, server configs and map rotations, status probe |
+| [`patches/engine/`](patches/engine) | Engine patches 0001–0012 |
+| [`patches/bots/`](patches/bots) | Game and cgame patch for trem-gpp-bots |
+| [`web/`](web) | Landing page, `play.js`, `touch.js`, `settings.js`, `perf.js`, service worker, manifest |
+| [`branding/pk3/`](branding/pk3) | In-game menus with server switching, packed into `zz-webnova360.pk3` |
+| [`scripts/`](scripts) | `build-web.js` (content-hashed release), `dev-server.js`, host scripts in `remote/` |
+| [`deploy/`](deploy) | nginx, Cloudflare Worker, systemd units and slice, server configs, status probe, watchdog |
+
+</details>
 
 ## Build and deploy
 
-**Local build.** You need Node 18+ and the game data from the web stack:
+You need Node 18+ and the game data from the web stack:
 
 ```bash
 git clone https://github.com/justinl1996/tremulous_web src/tremulous_web
@@ -179,35 +183,45 @@ node scripts/build-web.js --client path/to/web-client   # omit --client to use t
 node scripts/dev-server.js 8080 build/web
 ```
 
-Then open `http://localhost:8080/?play=menu`. The dev server tunnels game websockets to the live servers, so a local client build can be tried against real games.
+Then open `http://localhost:8080/?play=menu`. The dev server tunnels game websockets to the live servers, so you can try a local client build in real matches.
 
-**Engine and game module.** Each build clones the engine at the pinned commit, applies `patches/engine/*.patch` in order, and builds the client with Emscripten 3.1.74 (`emmake make release PLATFORM=js BUILD_CLIENT=1`). The dedicated server and the bot QVMs are built the same way from lepe/trem-gpp-bots with `patches/bots/*.patch`.
+<details>
+<summary><b>Engine, game module and host scripts</b></summary>
 
-**Host scripts** (`scripts/remote/`, run through `scripts/remote.ps1`):
-1. `01-bootstrap.sh` – one-time setup: packages, an unprivileged service user, sources.
-2. `03-build-on-host.sh` – builds `tremded` plus the bot `game.qvm` and `cgame.qvm`.
-3. `04b-build-client-staging.sh` – builds the wasm client into a staging folder, in a memory- and CPU-capped systemd scope, so it can be tested with the dev server first. `04-build-client-on-host.sh` builds directly into the deployed folder.
-4. `05-promote-client.sh` – promotes a tested staging client and keeps the previous one for rollback.
-5. `02-deploy.sh` – idempotent deploy.
-   - Installs the gateway, writes `zz-overmind-vm.pk3`, runs `build-web.js`, installs the nginx config and systemd units, and checks health through `status.json`.
-   - With `nightly` it downloads release artifacts instead of using local builds and verifies them against `SHA256SUMS`.
+**Engine and game module.** Each build does the following:
+1. Clones the engine at the pinned commit and applies `patches/engine/*.patch` in order.
+2. Builds the client with Emscripten 3.1.74 (`emmake make release PLATFORM=js BUILD_CLIENT=1`).
+3. Builds the dedicated server and the bot QVMs from lepe/trem-gpp-bots with `patches/bots/*.patch`.
 
-Host connection details live in a local, git-ignored file and are not part of this repository.
+**Host scripts** live in `scripts/remote/` and run through `scripts/remote.ps1`:
+1. `01-bootstrap.sh`: one-time setup (packages, an unprivileged service user, sources).
+2. `03-build-on-host.sh`: builds `tremded` and the bot `game.qvm` and `cgame.qvm`.
+3. `04b-build-client-staging.sh`: builds the wasm client into a staging folder, in a capped systemd scope.
+4. `05-promote-client.sh`: promotes the tested client and keeps the previous one for rollback.
+5. `02-deploy.sh <host> [ref] [nightly|local] [webonly]`: idempotent deploy. Installs nginx, the units, the slice and the watchdog, then checks health through `status.json`. `webonly` leaves running matches alone.
+
+Host connection details live in a local, git-ignored file.
+
+</details>
 
 ## Credits
 
-- **Tremulous** was created by **Dark Legion Development**.
-- **GrangerHub** kept it alive with Tremulous 1.3.
-- **Justin Luong (greekman99)** and **Auriga (Alexander)** made the browser port: [tremulous](https://github.com/justinl1996/tremulous), [tremulous_web](https://github.com/justinl1996/tremulous_web) and the UDP-capable [websockify](https://github.com/justinl1996/websockify). Their work builds on **QuakeJS** and **ioquake3**.
+Tremulous exists because of a lot of people:
+
+- **Dark Legion Development** created the game.
+- **GrangerHub** kept it alive with 1.3.
+- **Justin Luong (greekman99)** and **Auriga** did the Emscripten port, [tremulous_web](https://github.com/justinl1996/tremulous_web) and the UDP-capable websockify. Their work builds on **QuakeJS** and **ioquake3**.
 - The bots come from **P-Bot**, **GlobalWarming / lepe** ([trem-gpp-bots](https://github.com/lepe/trem-gpp-bots)) and **CoW-Tremulous**.
 
 The full list is in [CREDITS.md](CREDITS.md).
 
-[WebNova360](https://webnova360.com/?ref=github) hosts and extends the game. We build software and automation for EU teams.
+The browser edition is built and hosted by **[WebNova360](https://webnova360.com/?ref=github)**. We build software and automation for EU teams.
 
 ## License
 
-- **Code** is GPL: the engine is GPL-2.0-or-later, and the web stack and our additions are GPL-3.0 (see [LICENSE](LICENSE)).
-- **Tremulous game data** is [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5/). Our branding pak and the landing page artwork reuse that data and stay under the same license.
+- **Code** is GPL. The engine is GPL-2.0-or-later; the web stack and our additions are GPL-3.0 ([LICENSE](LICENSE)).
+- **Game data** is [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5/). The branding pak and the artwork derived from it keep that license.
 
 Found a security problem? See [SECURITY.md](SECURITY.md).
+
+<p align="center"><br><a href="https://webnova360.com/play-tremulous/"><b>Play now →</b></a></p>
