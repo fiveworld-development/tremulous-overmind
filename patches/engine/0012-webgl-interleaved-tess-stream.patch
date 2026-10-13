@@ -1,0 +1,126 @@
+diff --git a/src/renderergl2/tr_vbo.cpp b/src/renderergl2/tr_vbo.cpp
+index f851ab6..623bbd5 100644
+--- a/src/renderergl2/tr_vbo.cpp
++++ b/src/renderergl2/tr_vbo.cpp
+@@ -23,6 +23,9 @@ along with Tremulous; if not, see <https://www.gnu.org/licenses/>
+ // tr_vbo.c
+ #include "tr_local.h"
+ 
++// Overmind: attributes whose interleaved stream pointers tess.vao holds (RB_UpdateTessVao)
++static uint32_t tessLayoutUsed = ~0u;
++
+ 
+ void R_VaoPackTangent(int16_t *out, vec4_t v)
+ {
+@@ -497,6 +500,7 @@ void R_InitVaos(void)
+ 	tess.attribPointers[ATTR_INDEX_LIGHTDIRECTION] = tess.lightdir;
+ 
+ 	Vao_SetVertexPointers(tess.vao);
++	tessLayoutUsed = ~0u;   // the new tess.vao holds the init pointers, not a stream layout
+ 
+ 	R_BindNullVao();
+ 
+@@ -606,12 +610,19 @@ void RB_UpdateTessVao(unsigned int attribBits)
+ 		// whole SHADER_MAX_VERTEXES-sized buffers (bufferData NULL) twice per batch: in WebGL
+ 		// every such call is a fresh, zero-filled ~300 KB allocation (~45 batches a frame),
+ 		// and on ANGLE/Metal (Safari, Chrome on Mac) a bufferSubData into a buffer the GPU
+-		// is still reading copies the whole buffer. The attribute offsets change per batch,
+-		// so the pointers are set every time; with VAOs they are kept in tess.vao.
+-		static byte stream[sizeof(tess.xyz) + sizeof(tess.normal) + sizeof(tess.tangent) + sizeof(tess.color) +
+-			sizeof(tess.texCoords) + sizeof(tess.lightCoords) + sizeof(tess.lightdir) + 4 * ATTR_INDEX_COUNT];
++		// is still reading copies the whole buffer.
++		//
++		// The attributes are interleaved (one vertex after the other, fixed offsets inside it),
++		// so the attribute pointers only change when the set of attributes changes. Packed
++		// back to back they moved with every batch's vertex count: ~4 vertexAttribPointer
++		// calls per batch, a third of all GL calls - each a trip through the browser's GPU
++		// process and Metal/D3D validation. Fights reach 3000+ batches a frame.
++		static byte stream[(sizeof(tess.xyz[0]) + sizeof(tess.normal[0]) + sizeof(tess.tangent[0]) + sizeof(tess.color[0]) +
++			sizeof(tess.texCoords[0]) + sizeof(tess.lightCoords[0]) + sizeof(tess.lightdir[0]) + 4 * ATTR_INDEX_COUNT) * SHADER_MAX_VERTEXES];
+ 		int attribIndex;
+-		int streamSize = 0;
++		int used[ATTR_INDEX_COUNT], usedSize[ATTR_INDEX_COUNT], usedOffset[ATTR_INDEX_COUNT];
++		int numUsed = 0, vertexSize = 0;
++		uint32_t usedBits = 0;
+ 
+ 		R_BindVao(tess.vao);
+ 		qglBindBuffer(GL_ARRAY_BUFFER, tess.vao->vertexesVBO);
+@@ -620,26 +631,58 @@ void RB_UpdateTessVao(unsigned int attribBits)
+ 		if(!(attribBits & ATTR_BITS))
+ 			attribBits = ATTR_BITS;
+ 
++		// layout: which attributes this batch carries and where they sit inside a vertex
+ 		for (attribIndex = 0; attribIndex < ATTR_INDEX_COUNT; attribIndex++)
+ 		{
+-			uint32_t attribBit = 1 << attribIndex;
+ 			vaoAttrib_t *vAtb = &tess.vao->attribs[attribIndex];
+ 
+-			if (attribBits & attribBit)
++			// attributes tess has no data for (paint color, bones, md3 lerp) are left as before
++			if ((attribBits & (1 << attribIndex)) && vAtb->enabled && vAtb->stride && tess.attribPointers[attribIndex])
+ 			{
+-				// attributes tess has no data for (paint color, bones, md3 lerp) are left as before
+-				if (vAtb->enabled && vAtb->stride && tess.attribPointers[attribIndex])
+-				{
+-					// note: tess has a VBO where stride == size
+-					int size = tess.numVertexes * vAtb->stride;
++				// note: tess arrays are tightly packed, stride == element size (a multiple of 4)
++				used[numUsed] = attribIndex;
++				usedSize[numUsed] = vAtb->stride;
++				usedOffset[numUsed] = vertexSize;
++				vertexSize += (vAtb->stride + 3) & ~3;
++				usedBits |= 1 << attribIndex;
++				numUsed++;
++			}
++		}
+ 
+-					Com_Memcpy(stream + streamSize, tess.attribPointers[attribIndex], size);
+-					vAtb->offset = streamSize;
+-					streamSize += (size + 3) & ~3;
++		// interleave: word copies, every element size is a multiple of 4 bytes
++		{
++			int v, k;
++			for (k = 0; k < numUsed; k++)
++			{
++				const uint32_t *src = (const uint32_t *)tess.attribPointers[used[k]];
++				uint32_t *dst = (uint32_t *)(stream + usedOffset[k]);
++				int words = usedSize[k] >> 2, step = vertexSize >> 2;
+ 
+-					qglVertexAttribPointer(attribIndex, vAtb->count, vAtb->type, vAtb->normalized, vAtb->stride, BUFFER_OFFSET(vAtb->offset));
++				for (v = 0; v < tess.numVertexes; v++, dst += step)
++				{
++					int w;
++					for (w = 0; w < words; w++)
++						dst[w] = *src++;
+ 				}
++			}
++		}
+ 
++		if (usedBits != tessLayoutUsed)
++		{
++			for (attribIndex = 0; attribIndex < numUsed; attribIndex++)
++			{
++				vaoAttrib_t *vAtb = &tess.vao->attribs[used[attribIndex]];
++				qglVertexAttribPointer(used[attribIndex], vAtb->count, vAtb->type, vAtb->normalized, vertexSize, BUFFER_OFFSET(usedOffset[attribIndex]));
++			}
++			tessLayoutUsed = usedBits;
++		}
++
++		for (attribIndex = 0; attribIndex < ATTR_INDEX_COUNT; attribIndex++)
++		{
++			uint32_t attribBit = 1 << attribIndex;
++
++			if (attribBits & attribBit)
++			{
+ 				if (!(glState.vertexAttribsEnabled & attribBit))
+ 				{
+ 					qglEnableVertexAttribArray(attribIndex);
+@@ -656,7 +699,7 @@ void RB_UpdateTessVao(unsigned int attribBits)
+ 			}
+ 		}
+ 
+-		qglBufferData(GL_ARRAY_BUFFER, streamSize, stream, GL_STREAM_DRAW);
++		qglBufferData(GL_ARRAY_BUFFER, tess.numVertexes * vertexSize, stream, GL_STREAM_DRAW);
+ 		qglBufferData(GL_ELEMENT_ARRAY_BUFFER, tess.numIndexes * sizeof(tess.indexes[0]), tess.indexes, GL_STREAM_DRAW);
+ 	}
+ }
