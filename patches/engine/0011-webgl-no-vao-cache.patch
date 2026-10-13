@@ -1,0 +1,21 @@
+diff --git a/src/renderergl2/tr_surface.cpp b/src/renderergl2/tr_surface.cpp
+index 39f2c34..8c8ea8c 100644
+--- a/src/renderergl2/tr_surface.cpp
++++ b/src/renderergl2/tr_surface.cpp
+@@ -414,6 +414,16 @@ static bool RB_SurfaceVaoCached(int numVerts, srfVert_t *verts, int numIndexes,
+ 	bool recycleIndexBuffer = false;
+ 	bool endSurface = false;
+ 
++#ifdef EMSCRIPTEN
++	// Overmind: not in WebGL. The cache writes new surface sets with bufferSubData into a
++	// 12 MB buffer the GPU is still reading (ANGLE/Metal copies the whole buffer for that),
++	// orphans 2 x 12 MB (zero-filled allocations) whenever it fills, and searches all its
++	// entries linearly per batch. Looking around in a fight hits all three every frame:
++	// 120 -> 20 fps on Apple GPUs. The plain tess path streams exactly the visible batch.
++	(void)recycleVertexBuffer; (void)recycleIndexBuffer; (void)endSurface;
++	return false;
++#endif
++
+ 	if (!(!ShaderRequiresCPUDeforms(tess.shader) && !tess.shader->isSky && !tess.shader->isPortal))
+ 		return false;
+ 
