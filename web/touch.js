@@ -159,6 +159,9 @@
         '<div class="t-row"><span>Aim speed</span><span class="t-seg">' +
           '<button data-ui="aim-" aria-label="Slower">&minus;</button><span class="t-val" data-val="aim"></span>' +
           '<button data-ui="aim+" aria-label="Faster">+</button></span></div>' +
+        '<div class="t-row"><span>Brightness</span><span class="t-seg">' +
+          '<button data-ui="bright-" aria-label="Darker">&minus;</button><span class="t-val" data-val="bright"></span>' +
+          '<button data-ui="bright+" aria-label="Brighter">+</button></span></div>' +
         '<div class="t-row"><span>Auto fire</span>' + seg('autofire', [['0', 'Off'], ['1', 'On']]) + '</div>' +
         '<div class="t-row"><span>Gyro aim</span>' + seg('gyro', [['0', 'Off'], ['1', 'On']]) + '</div>' +
         '<div class="t-row"><span>Haptics</span>' + seg('haptics', [['0', 'Off'], ['1', 'On']]) + '</div>' +
@@ -575,6 +578,8 @@
         b.classList.toggle('on', on);
       });
       root.querySelector('[data-val="aim"]').textContent = settings.look.toFixed(2).replace(/0$/, '');
+      var ob = window.OvermindBrightness;
+      root.querySelector('[data-val="bright"]').textContent = ob ? Math.round(ob.get() * 100) + '%' : '100%';
       root.style.setProperty('--t-scale', SIZES[settings.size] || 1);
     }
     function stepAim(dir) {
@@ -589,6 +594,10 @@
         case 'close': sheet.hidden = true; break;
         case 'aim-': stepAim(-1); break;
         case 'aim+': stepAim(1); break;
+        // brightness lives in settings.js (CSS filter on the canvas, shared with desktop)
+        case 'bright-': case 'bright+':
+          if (window.OvermindBrightness) window.OvermindBrightness.set(window.OvermindBrightness.get() + (p[0] === 'bright+' ? 0.1 : -0.1));
+          break;
         case 'gyro': setGyro(p.length === 2 ? p[1] === '1' : !settings.gyro); break;
         case 'haptics': settings.haptics = p[1] === '1'; buzz(10); break;
         case 'autofire': settings.autofire = p[1] === '1'; break;

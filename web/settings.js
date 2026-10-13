@@ -216,6 +216,36 @@
     }
   }
 
+  // ---------- brightness ----------
+  // The engine's gamma (r_gamma) needs hardware gamma ramps, which a browser canvas does
+  // not have, and some maps are very dark. The page brightens the finished picture with a
+  // CSS filter on the game canvas instead: one compositor pass, and none at 100 %.
+  // Shared with the touch settings sheet (touch.js) through window.OvermindBrightness.
+  var BRIGHT_KEY = 'overmind.brightness', BRIGHT_MIN = 0.8, BRIGHT_MAX = 1.8;
+  var brightness = 1;
+  try {
+    var bs = parseFloat(localStorage.getItem(BRIGHT_KEY));
+    if (isFinite(bs)) brightness = Math.min(BRIGHT_MAX, Math.max(BRIGHT_MIN, bs));
+  } catch (e) { /* private mode */ }
+  function applyBrightness() {
+    var de = document.documentElement;
+    if (brightness === 1) { de.classList.remove('om-bright'); de.style.removeProperty('--om-bright'); }
+    else { de.classList.add('om-bright'); de.style.setProperty('--om-bright', String(brightness)); }
+  }
+  function setBrightness(v) {
+    v = Math.round(Math.min(BRIGHT_MAX, Math.max(BRIGHT_MIN, +v || 1)) * 20) / 20;   // 5 % steps
+    brightness = v;
+    applyBrightness();
+    try { localStorage.setItem(BRIGHT_KEY, String(v)); } catch (e) { /* private mode */ }
+    return v;
+  }
+  applyBrightness();
+  window.OvermindBrightness = {
+    get: function () { return brightness; },
+    set: setBrightness,
+    min: BRIGHT_MIN, max: BRIGHT_MAX
+  };
+
   // ---------- panel ----------
   var root = null, statusEl = null, rawNote = null, rowEls = {};
   var send = function () {};
@@ -374,6 +404,22 @@
     }, rawNote);
     body.appendChild(mouse);
 
+    // picture
+    var pic = el('section', 'om-set-sec om-set-mouse');
+    pic.appendChild(el('h3', 'om-set-h', 'Picture'));
+    var bf = el('div', 'om-set-field');
+    var bl = el('label', null, 'Brightness'); bl.htmlFor = 'om-set-bright';
+    var br = el('input'); br.type = 'range'; br.id = 'om-set-bright';
+    br.min = String(BRIGHT_MIN); br.max = String(BRIGHT_MAX); br.step = '0.05'; br.value = String(brightness);
+    var bo = el('output', 'om-set-val', Math.round(brightness * 100) + '%'); bo.htmlFor = 'om-set-bright';
+    br.addEventListener('input', function () {
+      var v = setBrightness(br.value);
+      bo.textContent = Math.round(v * 100) + '%';
+    });
+    bf.appendChild(bl); bf.appendChild(br); bf.appendChild(bo);
+    pic.appendChild(bf);
+    body.appendChild(pic);
+
     // bindings
     GROUPS.forEach(function (g) {
       var sec = el('section', 'om-set-sec');
@@ -425,7 +471,9 @@
 
     box.appendChild(head); box.appendChild(body); box.appendChild(foot);
     root.appendChild(box);
-    document.body.appendChild(root);
+    // in fullscreen only the fullscreen element (the game) is shown: a panel on <body>
+    // was invisible there while it still caught every key ("Options does nothing")
+    (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(root);
     paintAll();
 
     var f = focusId && document.getElementById(focusId);
@@ -440,7 +488,9 @@
     send = typeof sendCommand === 'function' ? sendCommand : function () {};
     lastFocus = document.activeElement;
     try { if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); } catch (e) { /* ignore */ }
-    if (!root) build();
+    var host = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+    if (root && root.parentNode !== host) build();   // fullscreen changed since it was built
+    else if (!root) build();
     else { paintAll(); focusables()[0].focus(); }
     say('Click a key slot, then press the new key or mouse button.');
   }
