@@ -19,7 +19,11 @@ RestartSec=2
 Slice=tremulous.slice
 Nice=-5
 CPUWeight=400
-CPUQuota=60%
+# one websockify process per player: a full server is 20-40 of them, and a 60 % quota
+# would throttle all players' packets at once. 150 % = never in practice, short period
+# keeps any throttle to a millisecond.
+CPUQuota=150%
+CPUQuotaPeriodSec=10ms
 MemoryHigh=120M
 MemoryMax=180M
 TasksMax=128
