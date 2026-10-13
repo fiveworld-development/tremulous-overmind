@@ -7,6 +7,7 @@ cd /   # sudo -u trem cannot stat the caller's home
 HOST_NAME=${1:?host name, e.g. play.webnova360.com}
 REF=${2:-main}
 ARTIFACTS=${3:-${ARTIFACTS:-nightly}}   # nightly | local
+MODE=${4:-full}   # full | webonly (web files + units/nginx, game servers keep running)
 REPO=https://github.com/fiveworld-development/tremulous-overmind
 WEBSOCKIFY_COMMIT=7ad65ad51ffe9e186cf78a41fb3b2235fd5fc14e   # justinl1996/websockify "hacky support for udp"
 B=/opt/tremulous
@@ -114,7 +115,9 @@ sudo -n systemctl daemon-reload
 sudo -n systemctl reset-failed 'tremulous-*' 2>/dev/null || true
 for i in 1 2; do
     sudo -n systemctl enable -q "tremulous-server@$i" "tremulous-gateway@$i"
-    sudo -n systemctl restart "tremulous-server@$i" "tremulous-gateway@$i"
+    if [ "$MODE" != webonly ]; then
+        sudo -n systemctl restart "tremulous-server@$i" "tremulous-gateway@$i"
+    fi
 done
 sudo -n systemctl enable -q --now tremulous-status.timer tremulous-watchdog.timer
 
