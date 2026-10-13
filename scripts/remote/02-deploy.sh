@@ -104,9 +104,10 @@ sudo -n find "$B/web" -type d -exec chmod 0750 {} + -o -type f -exec chmod 0640 
 echo "== status helper"
 sudo -n install -d -o trem -g trem "$B/bin"
 sudo -n install -m 0755 -o root -g root "$O/deploy/status/tremulous-status.py" "$B/bin/tremulous-status.py"
+sudo -n install -m 0755 -o root -g root "$O/deploy/status/tremulous-watchdog.py" "$B/bin/tremulous-watchdog.py"
 
 echo "== systemd"
-for u in tremulous.slice tremulous-server@.service tremulous-gateway@.service tremulous-status.service tremulous-status.timer; do
+for u in tremulous.slice tremulous-server@.service tremulous-gateway@.service tremulous-status.service tremulous-status.timer tremulous-watchdog.service tremulous-watchdog.timer; do
     sudo -n install -m 0644 "$O/deploy/systemd/$u" "/etc/systemd/system/$u"
 done
 sudo -n systemctl daemon-reload
@@ -115,7 +116,7 @@ for i in 1 2; do
     sudo -n systemctl enable -q "tremulous-server@$i" "tremulous-gateway@$i"
     sudo -n systemctl restart "tremulous-server@$i" "tremulous-gateway@$i"
 done
-sudo -n systemctl enable -q --now tremulous-status.timer
+sudo -n systemctl enable -q --now tremulous-status.timer tremulous-watchdog.timer
 
 echo "== nginx"
 if ! sudo -n test -f /etc/ssl/tremulous/origin.crt; then

@@ -128,7 +128,7 @@
           setTimeout(function () { progress(100); splash.classList.add('done'); }, wait);
           if (isTouch) attachTouch(M, 0);
           if (settings) attachSettings(M);
-          watchNav(M);
+          watchNav(M, server);
           watchTutorial(M);
         }
       });
@@ -213,19 +213,44 @@
     }, 500);
   }
 
-  var navName = 0;
-  function watchNav(M) {
+  var navName = 0, errName = 0;
+  function watchNav(M, server) {
     if (!M._Cvar_VariableString || !M._Overmind_Command || !M.UTF8ToString) return;
+    // Auto-rejoin: a crashed or hung server is restarted on the host within seconds
+    // (exit + systemd, watchdog). Players who were in a game get put back instead of
+    // being left on a menu: right away when the engine reports the drop, else after a
+    // long silence (a normal map change or a slow phone loading a map stays below it).
+    var current = server || 1, wasIn = false, lostAt = 0, lastErr = null, lastTry = 0, tries = 0;
+    var navAt = 0, LOST_MS = 25000, RETRY_MS = 30000, MAX_TRIES = 10;
+    function rejoin() {
+      lastTry = Date.now(); tries++;
+      M.websocket.url = wsUrl(current);
+      engineCommand(M, 'connect overmind-' + current);
+    }
     setInterval(function () {
-      if (!navName) navName = engineString(M, 'overmind_nav');
+      if (!navName) { navName = engineString(M, 'overmind_nav'); errName = engineString(M, 'com_errorMessage'); }
       var v = M.UTF8ToString(M._Cvar_VariableString(navName));
-      if (!v) return;
-      engineCommand(M, 'set overmind_nav ""');
-      if (v === 'home') { leave(); return; }
-      if (v === 'options') { openOptions(M); return; }
-      var server = v === '2' ? 2 : 1;
-      M.websocket.url = wsUrl(server);
-      engineCommand(M, 'connect overmind-' + server);
+      var now = Date.now();
+      if (v) {
+        engineCommand(M, 'set overmind_nav ""');
+        if (v === 'home') { leave(); return; }
+        if (v === 'options') { openOptions(M); return; }
+        current = v === '2' ? 2 : 1;
+        navAt = now; wasIn = false; tries = 0;
+        M.websocket.url = wsUrl(current);
+        engineCommand(M, 'connect overmind-' + current);
+        return;
+      }
+      var err = M.UTF8ToString(M._Cvar_VariableString(errName));
+      if (lastErr === null) lastErr = err;
+      var active = !!(M._Overmind_State() & 0x100);
+      if (active) { wasIn = true; lostAt = 0; tries = 0; lastErr = err; return; }
+      if (!wasIn || now - navAt < LOST_MS) return;
+      if (!lostAt) lostAt = now;
+      var dropped = err !== lastErr;          // the engine said why it lost the game
+      if (dropped && /kick|ban/i.test(err)) { wasIn = false; return; }   // removed on purpose
+      if (tries >= MAX_TRIES || now - lastTry < RETRY_MS) return;
+      if (dropped ? now - lostAt > 3000 : now - lostAt > LOST_MS) { lastErr = err; rejoin(); }
     }, 300);
   }
 

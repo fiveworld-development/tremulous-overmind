@@ -1,0 +1,20 @@
+diff --git a/src/qcommon/common.cpp b/src/qcommon/common.cpp
+index 00141a6..e358281 100644
+--- a/src/qcommon/common.cpp
++++ b/src/qcommon/common.cpp
+@@ -330,6 +330,15 @@ void QDECL Com_Error( int code, const char *fmt, ... )
+     if ( code != ERR_DISCONNECT )
+         Cvar_Set("com_errorMessage", com_errorMessage);
+ 
++    // Overmind: a dedicated server that drops its map ("Server crashed") stays alive
++    // without a map, so systemd never restarts it. Exit instead: Restart=always brings
++    // it back within seconds on a fresh map.
++    if ( code == ERR_DROP && com_dedicated && com_dedicated->integer )
++    {
++        Com_Printf( "********************\nERROR: %s\n********************\n", com_errorMessage );
++        code = ERR_FATAL;
++    }
++
+     if (code == ERR_DISCONNECT || code == ERR_SERVERDISCONNECT)
+     {
+         VM_Forced_Unload_Start();

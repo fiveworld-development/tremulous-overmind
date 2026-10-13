@@ -1,0 +1,17 @@
+[Unit]
+Description=Restart Tremulous servers that stopped answering
+
+[Service]
+Type=oneshot
+# root: it has to restart units; it only talks UDP to localhost and to systemd
+ExecStart=/usr/bin/python3 /opt/tremulous/bin/tremulous-watchdog.py
+Nice=-5
+ProtectSystem=strict
+ReadWritePaths=/run
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native
