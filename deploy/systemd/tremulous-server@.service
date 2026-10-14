@@ -38,6 +38,10 @@ IOWeight=40
 # 192 MB hunk: nexus6 with 40 slots failed Hunk_Alloc at 128 (pages are only resident once used)
 MemoryHigh=320M
 MemoryMax=420M
+# the host swaps under its other jobs; a game server page fault on swap stalls a frame
+# for the whole disk wait, and a stalled frame snowballs (engine 0013). Never swap these.
+MemorySwapMax=0
+MemoryLow=200M
 TasksMax=32
 
 # sandbox

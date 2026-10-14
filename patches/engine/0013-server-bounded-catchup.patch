@@ -1,0 +1,19 @@
+diff --git a/src/server/sv_main.cpp b/src/server/sv_main.cpp
+index 95d6afa..e49ec41 100644
+--- a/src/server/sv_main.cpp
++++ b/src/server/sv_main.cpp
+@@ -1307,6 +1307,14 @@ void SV_Frame( int msec ) {
+ 	// update ping based on the all received frames
+ 	SV_CalcPings();
+ 
++	// Overmind: catch up at most a few game frames. Unbounded catch-up turns one slow
++	// frame on a full bot server into a spiral (each frame runs more game frames than the
++	// last, 0.5 s -> 1.2 s for 15 s, a frozen game); dropping the backlog only holds game
++	// time back for a moment, and clients resync to it.
++	if ( com_dedicated->integer && sv.timeResidual > 3 * frameMsec ) {
++		sv.timeResidual = 3 * frameMsec;
++	}
++
+ 	// run the game simulation in chunks
+ 	while ( sv.timeResidual >= frameMsec ) {
+ 		sv.timeResidual -= frameMsec;
