@@ -218,19 +218,47 @@
 
   // ---------- brightness ----------
   // The engine's gamma (r_gamma) needs hardware gamma ramps, which a browser canvas does
-  // not have, and some maps are very dark. The page brightens the finished picture with a
-  // CSS filter on the game canvas instead: one compositor pass, and none at 100 %.
+  // not have, and Tremulous maps were lit for players running r_gamma 1.3-1.6. The page
+  // applies the same curve to the finished picture: an SVG gamma transfer on the game
+  // canvas (one table lookup per pixel in the compositor, none at 100 %). A gamma curve
+  // lifts the shadows and leaves white white; a plain brightness() burnt out the lights.
   // Shared with the touch settings sheet (touch.js) through window.OvermindBrightness.
-  var BRIGHT_KEY = 'overmind.brightness', BRIGHT_MIN = 0.8, BRIGHT_MAX = 1.8;
-  var brightness = 1;
+  var BRIGHT_KEY = 'overmind.gamma', BRIGHT_MIN = 0.8, BRIGHT_MAX = 1.8, BRIGHT_DEFAULT = 1.3;
+  var brightness = BRIGHT_DEFAULT;
   try {
     var bs = parseFloat(localStorage.getItem(BRIGHT_KEY));
     if (isFinite(bs)) brightness = Math.min(BRIGHT_MAX, Math.max(BRIGHT_MIN, bs));
   } catch (e) { /* private mode */ }
+  var gammaFuncs = null;
+  function gammaFilter() {
+    if (gammaFuncs) return;
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '0'); svg.setAttribute('height', '0');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.style.position = 'absolute';
+    var f = document.createElementNS(NS, 'filter');
+    f.setAttribute('id', 'om-gamma');
+    f.setAttribute('color-interpolation-filters', 'sRGB');   // the curve works on screen values
+    var ct = document.createElementNS(NS, 'feComponentTransfer');
+    gammaFuncs = ['feFuncR', 'feFuncG', 'feFuncB'].map(function (n) {
+      var fn = document.createElementNS(NS, n);
+      fn.setAttribute('type', 'gamma');
+      fn.setAttribute('amplitude', '1');
+      fn.setAttribute('offset', '0');
+      ct.appendChild(fn);
+      return fn;
+    });
+    f.appendChild(ct); svg.appendChild(f);
+    document.documentElement.appendChild(svg);
+  }
   function applyBrightness() {
     var de = document.documentElement;
-    if (brightness === 1) { de.classList.remove('om-bright'); de.style.removeProperty('--om-bright'); }
-    else { de.classList.add('om-bright'); de.style.setProperty('--om-bright', String(brightness)); }
+    if (brightness === 1) { de.classList.remove('om-bright'); return; }
+    gammaFilter();
+    var e = String(Math.round(1000 / brightness) / 1000);
+    gammaFuncs.forEach(function (fn) { fn.setAttribute('exponent', e); });
+    de.classList.add('om-bright');
   }
   function setBrightness(v) {
     v = Math.round(Math.min(BRIGHT_MAX, Math.max(BRIGHT_MIN, +v || 1)) * 20) / 20;   // 5 % steps
