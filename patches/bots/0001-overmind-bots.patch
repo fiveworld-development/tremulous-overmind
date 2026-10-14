@@ -486,7 +486,7 @@ index f68a52a..f860dd2 100644
  	}
  }
 diff --git a/src/game/g_bot.h b/src/game/g_bot.h
-index 2e09378..f23fbc4 100644
+index 2e09378..baff80f 100644
 --- a/src/game/g_bot.h
 +++ b/src/game/g_bot.h
 @@ -188,6 +188,7 @@ typedef struct
@@ -506,7 +506,15 @@ index 2e09378..f23fbc4 100644
  void G_BotDelRandom ( team_t team );
  
  // g_bot_nav.c
-@@ -335,6 +338,8 @@ int botFindClosestNode( gentity_t *self );
+@@ -317,6 +320,7 @@ void BotTargetPath( gentity_t *self );
+ void BotFindNewPath( gentity_t *self );
+ void BotFindNextPath( gentity_t *self );
+ void BotBlocked( gentity_t *self );
++qboolean BotGiveWay( gentity_t *self );
+ void BotLost( gentity_t *self );
+ int distanceToTargetNode( gentity_t *self );
+ qboolean botAimAtPath( gentity_t *self );
+@@ -335,6 +339,8 @@ int botFindClosestNode( gentity_t *self );
  int botFindEnemy( gentity_t *self, int maxRange );
  qboolean botFindPath( int *path , int goal, int start );
  qboolean botAimAtTarget( gentity_t *self, gentity_t *target, qboolean pitch);
@@ -515,6 +523,25 @@ index 2e09378..f23fbc4 100644
  qboolean botFindClosestFriend( gentity_t *self );
  qboolean botSameTeam( gentity_t *ent1, gentity_t *ent2 );
  qboolean botHitTarget( gentity_t *self, int time );
+diff --git a/src/game/g_bot_alien.c b/src/game/g_bot_alien.c
+index be8e655..a729d25 100644
+--- a/src/game/g_bot_alien.c
++++ b/src/game/g_bot_alien.c
+@@ -180,7 +180,13 @@ void BotBlockedAlien( gentity_t *self )
+ {
+ 	int try = self->bot->path.blocked_try;
+ 	qboolean canwallwalk = ( BG_ClassHasAbility( self->client->ps.stats[ STAT_CLASS ], SCA_WALLCLIMBER ) );
+-	
++
++	// a teammate in the way (two tyrants in one door): one of the two makes room
++	if( try % BOT_TIMER_NAV_SECOND == 0 && BotGiveWay( self ) ) {
++		self->bot->path.blocked_try++;
++		return;
++	}
++
+ 	if(canwallwalk) BotWallWalk( self ); //if possible
+ 
+ 	G_BotDebug(self, BOT_VERB_DETAIL, BOT_DEBUG_ALIEN + BOT_DEBUG_NAVSTATE, "[ %d ] Trying to unblock. Rand: %d\n", try, rand );
 diff --git a/src/game/g_bot_common.c b/src/game/g_bot_common.c
 index 5a888c9..27e0f02 100644
 --- a/src/game/g_bot_common.c
@@ -529,11 +556,67 @@ index 5a888c9..27e0f02 100644
  }
  /**
   * Bot will attack to a target
+diff --git a/src/game/g_bot_human.c b/src/game/g_bot_human.c
+index 2cc8b37..9259de6 100644
+--- a/src/game/g_bot_human.c
++++ b/src/game/g_bot_human.c
+@@ -236,6 +236,11 @@ void BotBlockedHuman( gentity_t *self ){
+ 	 * to help the bot to remove block */
+ 	if(low_stamina) self->client->ps.stats[ STAT_STAMINA ] = 1000;
+ 
++	// a teammate in the way (two battlesuits in one door): one of the two makes room
++	if( try % BOT_TIMER_NAV_SECOND == 0 && BotGiveWay( self ) ) {
++		self->bot->path.blocked_try++;
++		return;
++	}
+ 	G_BotDebug(self, BOT_VERB_DETAIL, BOT_DEBUG_HUMAN + BOT_DEBUG_NAVSTATE, "Trying to unblock. Try: %d\n", try);
+ 	if(try <= 0) {
+ 		BotMoveFwd( self );
 diff --git a/src/game/g_bot_nav.c b/src/game/g_bot_nav.c
-index 723ef47..e7b8096 100644
+index 723ef47..d0993e5 100644
 --- a/src/game/g_bot_nav.c
 +++ b/src/game/g_bot_nav.c
-@@ -311,7 +311,8 @@ qboolean botAimAtPath( gentity_t *self )
+@@ -258,6 +258,39 @@ void BotBlocked( gentity_t *self ) {
+ 	}
+ }
+ 
++/**
++ * Overmind: two bots meeting in a doorway both push forward and jump until one dies.
++ * If a teammate is what blocks us, one of the two gives way: it backs off and steps
++ * aside for a moment while the other walks through. Between two bots the higher
++ * client number yields; a bot always yields to a human.
++ * @return qtrue if the bot is giving way
++ */
++qboolean BotGiveWay( gentity_t *self ) {
++	vec3_t    forward, end;
++	trace_t   tr;
++	gentity_t *other;
++
++	if( self->bot->move.exec )
++		return qfalse;
++	AngleVectors( self->client->ps.viewangles, forward, NULL, NULL );
++	forward[ 2 ] = 0;
++	if( VectorNormalize( forward ) == 0.0f )
++		return qfalse;
++	VectorMA( self->r.currentOrigin, 48, forward, end );
++	trap_Trace( &tr, self->r.currentOrigin, self->r.mins, self->r.maxs, end, self->s.number, MASK_PLAYERSOLID );
++	if( tr.fraction == 1.0f || tr.entityNum >= MAX_CLIENTS )
++		return qfalse;
++	other = &g_entities[ tr.entityNum ];
++	if( !other->client || other->client->ps.stats[ STAT_TEAM ] != self->client->ps.stats[ STAT_TEAM ] )
++		return qfalse;
++	if( ( other->r.svFlags & SVF_BOT ) && self->s.number < other->s.number )
++		return qfalse; // the other one makes room
++	BotAddMove( self, BOT_MOVE_BACK, 700 );
++	BotAddMove( self, ( self->s.number & 1 ) ? BOT_MOVE_LEFT : BOT_MOVE_RIGHT, 800 );
++	BotStartMove( self, BOT_MOVE_FWD ); // the path code's "forward" waits meanwhile
++	return qtrue;
++}
++
+ /**
+  * What to do if the bot is lost
+  * @param self
+@@ -311,7 +344,8 @@ qboolean botAimAtPath( gentity_t *self )
  		VectorNormalize( dirToTarget );
  		vectoangles( dirToTarget, angleToTarget );
  		//self->client->ps.delta_angles[ PITCH ] = ANGLE2SHORT( angleToTarget[ PITCH ] ); //this makes bots to move aim in Z angles
@@ -543,7 +626,7 @@ index 723ef47..e7b8096 100644
  		//don't use lookat on aiming path
  		//self->bot->move.lookat[ PITCH ] = self->client->ps.delta_angles[ PITCH ];
  		//self->bot->move.lookat[ YAW ] = ANGLE2SHORT( angleToTarget[ YAW ] );
-@@ -386,6 +387,18 @@ void setCrumb( gentity_t *self, int closestpath )
+@@ -386,6 +420,18 @@ void setCrumb( gentity_t *self, int closestpath )
          self->bot->path.numCrumb = nc;
      }
      G_BotDebug(self, BOT_VERB_DETAIL, BOT_DEBUG_NAV + BOT_DEBUG_PATH,"Setting crumb : %i to node: %i\n",self->bot->path.numCrumb,closestpath);
